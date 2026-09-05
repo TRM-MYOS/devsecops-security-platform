@@ -2,28 +2,21 @@ name: Central Security Gate
 
 on:
   workflow_call:
-
-  workflow_dispatch:
-
-  push:
-
-  pull_request:
+    secrets:
+      CENTRAL_REPO_TOKEN:
+        required: true
 
 permissions:
   contents: read
 
 jobs:
-
   security-scan:
-
     name: Security Scan
-
     runs-on: ubuntu-latest
 
     steps:
-
       # =====================================================
-      # 1. Checkout repository ที่เรียก workflow
+      # 1. Checkout repository ที่เรียก Central Workflow
       # =====================================================
 
       - name: Checkout repository
@@ -57,7 +50,8 @@ jobs:
       - name: Install Trivy
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget
+          sudo apt-get install -y wget gnupg
+
           wget -qO- https://aquasecurity.github.io/trivy-repo/deb/public.key \
             | sudo gpg --dearmor \
             -o /usr/share/keyrings/trivy.gpg
@@ -67,6 +61,8 @@ jobs:
 
           sudo apt-get update
           sudo apt-get install -y trivy
+
+          trivy --version
 
 
       # =====================================================
@@ -89,15 +85,16 @@ jobs:
 
 
       # =====================================================
-      # 6. Clone Central Security Platform
+      # 6. Checkout Central Security Platform
       # =====================================================
 
-      - name: Get central security platform
-        run: |
-          git clone \
-            --depth 1 \
-            https://github.com/TRM-MYOS/devsecops-security-platform.git \
-            .security-platform
+      - name: Checkout central security platform
+        uses: actions/checkout@v6
+        with:
+          repository: TRM-MYOS/devsecops-security-platform
+          ref: main
+          token: ${{ secrets.CENTRAL_REPO_TOKEN }}
+          path: .security-platform
 
 
       # =====================================================
@@ -121,7 +118,7 @@ jobs:
             -r . \
             -f json \
             -o security-reports/bandit.json \
-            --exclude .git,.security-platform
+            --exclude .git,.security-platform,security-reports
 
           BANDIT_EXIT=$?
 
@@ -145,6 +142,7 @@ jobs:
             --output security-reports/trivy.json \
             --skip-dirs .git \
             --skip-dirs .security-platform \
+            --skip-dirs security-reports \
             .
 
           TRIVY_EXIT=$?
@@ -177,19 +175,7 @@ jobs:
 
 
       # =====================================================
-      # 11. Copy central security logic
-      # =====================================================
-
-      - name: Run central security policy
-        run: |
-          cp .security-platform/security/parser.py ./central_parser.py
-          cp .security-platform/security/scoring.py ./central_scoring.py
-          cp .security-platform/security/policy.py ./central_policy.py
-          cp .security-platform/security-policy.yaml ./central-security-policy.yaml
-
-
-      # =====================================================
-      # 12. Build final security result
+      # 11. Evaluate using CENTRAL security logic
       # =====================================================
 
       - name: Evaluate security gate
@@ -199,9 +185,13 @@ jobs:
           import sys
           from pathlib import Path
 
+          central_platform = Path(
+              ".security-platform"
+          ).resolve()
+
           sys.path.insert(
               0,
-              str(Path(".security-platform").resolve())
+              str(central_platform)
           )
 
           from security.parser import (
@@ -218,7 +208,9 @@ jobs:
               evaluate_policy,
           )
 
-          reports = Path("security-reports")
+          reports = Path(
+              "security-reports"
+          )
 
           bandit = reports / "bandit.json"
           trivy = reports / "trivy.json"
@@ -230,9 +222,13 @@ jobs:
               gitleaks,
           )
 
-          score = calculate_score(findings)
+          score = calculate_score(
+              findings
+          )
 
-          grade = calculate_grade(score)
+          grade = calculate_grade(
+              score
+          )
 
           policy = evaluate_policy(
               findings,
@@ -252,8 +248,12 @@ jobs:
               "status": policy["status"],
               "reason": policy["reason"],
               "findings": len(findings),
-              "scanner_counts": summary["scanner_counts"],
-              "severity_counts": summary["severity_counts"],
+              "scanner_counts": summary[
+                  "scanner_counts"
+              ],
+              "severity_counts": summary[
+                  "severity_counts"
+              ],
               "findings_details": findings,
           }
 
@@ -269,27 +269,49 @@ jobs:
           )
 
           print()
-          print("========================================")
-          print("       DEVSECOPS SECURITY GATE")
-          print("========================================")
-          print(f"Score    : {score}/100")
-          print(f"Grade    : {grade}")
-          print(f"Status   : {policy['status']}")
-          print(f"Reason   : {policy['reason']}")
-          print(f"Findings : {len(findings)}")
-          print("========================================")
+          print(
+              "========================================"
+          )
+          print(
+              "       DEVSECOPS SECURITY GATE"
+          )
+          print(
+              "========================================"
+          )
+          print(
+              f"Score    : {score}/100"
+          )
+          print(
+              f"Grade    : {grade}"
+          )
+          print(
+              f"Status   : {policy['status']}"
+          )
+          print(
+              f"Reason   : {policy['reason']}"
+          )
+          print(
+              f"Findings : {len(findings)}"
+          )
+          print(
+              "========================================"
+          )
           print()
 
           if policy["status"] == "BLOCK":
-              print("SECURITY GATE: BLOCK")
+              print(
+                  "SECURITY GATE: BLOCK"
+              )
               sys.exit(1)
 
-          print("SECURITY GATE: ALLOW")
+          print(
+              "SECURITY GATE: ALLOW"
+          )
           PY
 
 
       # =====================================================
-      # 13. Upload security report
+      # 12. Upload security reports
       # =====================================================
 
       - name: Upload security reports
