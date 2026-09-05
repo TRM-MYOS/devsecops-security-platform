@@ -2,322 +2,247 @@ name: Central Security Gate
 
 on:
   workflow_call:
-    secrets:
-      CENTRAL_REPO_TOKEN:
-        required: true
 
 permissions:
   contents: read
 
 jobs:
   security-scan:
-    name: Security Scan
+    name: Run Central Security Scan
     runs-on: ubuntu-latest
 
     steps:
-      # =====================================================
-      # 1. Checkout repository ที่เรียก Central Workflow
-      # =====================================================
 
-      - name: Checkout repository
-        uses: actions/checkout@v6
+      # =================================================
+      # 1. Checkout repository ที่เรียกใช้ Workflow
+      # =================================================
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-
-      # =====================================================
+      # =================================================
       # 2. Setup Python
-      # =====================================================
-
+      # =================================================
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: "3.13"
 
-
-      # =====================================================
-      # 3. Install Python dependencies
-      # =====================================================
-
-      - name: Install security platform dependencies
+      # =================================================
+      # 3. Install Python security tools
+      # =================================================
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install bandit==1.9.4 PyYAML==6.0.3
+          pip install bandit PyYAML
 
-
-      # =====================================================
+      # =================================================
       # 4. Install Trivy
-      # =====================================================
-
+      # =================================================
       - name: Install Trivy
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget gnupg
+          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
 
-          wget -qO- https://aquasecurity.github.io/trivy-repo/deb/public.key \
-            | sudo gpg --dearmor \
-            -o /usr/share/keyrings/trivy.gpg
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key \
+            | gpg --dearmor \
+            | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
 
-          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" \
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" \
             | sudo tee /etc/apt/sources.list.d/trivy.list
 
           sudo apt-get update
           sudo apt-get install -y trivy
 
-          trivy --version
-
-
-      # =====================================================
+      # =================================================
       # 5. Install Gitleaks
-      # =====================================================
-
+      # =================================================
       - name: Install Gitleaks
         run: |
-          GITLEAKS_VERSION="8.24.2"
+          GITLEAKS_VERSION="8.28.0"
 
           wget -q \
-            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            -O /tmp/gitleaks.tar.gz
 
-          tar -xzf \
-            "gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp
 
-          sudo mv gitleaks /usr/local/bin/gitleaks
+          sudo mv /tmp/gitleaks /usr/local/bin/gitleaks
 
           gitleaks version
 
-
-      # =====================================================
+      # =================================================
       # 6. Checkout Central Security Platform
-      # =====================================================
-
+      # =================================================
+      # Central repository เป็น Public แล้ว
+      # จึงไม่ต้องใช้ CENTRAL_REPO_TOKEN
+      # =================================================
       - name: Checkout central security platform
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           repository: TRM-MYOS/devsecops-security-platform
           ref: main
-          token: ${{ secrets.CENTRAL_REPO_TOKEN }}
           path: .security-platform
 
-
-      # =====================================================
-      # 7. Prepare reports
-      # =====================================================
-
-      - name: Prepare security reports
+      # =================================================
+      # 7. Prepare report directory
+      # =================================================
+      - name: Prepare reports
         run: |
-          mkdir -p security-reports
+          mkdir -p reports
 
-
-      # =====================================================
+      # =================================================
       # 8. Run Bandit
-      # =====================================================
-
+      # =================================================
       - name: Run Bandit
+        continue-on-error: true
         run: |
-          set +e
-
           bandit \
             -r . \
             -f json \
-            -o security-reports/bandit.json \
-            --exclude .git,.security-platform,security-reports
+            -o reports/bandit.json \
+            --exclude .git,.security-platform
 
-          BANDIT_EXIT=$?
-
-          if [ ! -f security-reports/bandit.json ]; then
-            echo '{"results":[]}' > security-reports/bandit.json
-          fi
-
-          echo "Bandit exit code: $BANDIT_EXIT"
-
-
-      # =====================================================
+      # =================================================
       # 9. Run Trivy
-      # =====================================================
-
+      # =================================================
       - name: Run Trivy
+        continue-on-error: true
         run: |
-          set +e
-
           trivy fs \
             --format json \
-            --output security-reports/trivy.json \
-            --skip-dirs .git \
-            --skip-dirs .security-platform \
-            --skip-dirs security-reports \
+            --output reports/trivy.json \
+            --scanners vuln,secret,misconfig \
             .
 
-          TRIVY_EXIT=$?
-
-          if [ ! -f security-reports/trivy.json ]; then
-            echo '{"Results":[]}' > security-reports/trivy.json
-          fi
-
-          echo "Trivy exit code: $TRIVY_EXIT"
-
-
-      # =====================================================
+      # =================================================
       # 10. Run Gitleaks
-      # =====================================================
-
+      # =================================================
       - name: Run Gitleaks
+        continue-on-error: true
         run: |
-          set +e
-
           gitleaks detect \
             --source . \
-            --redact \
+            --no-banner \
             --report-format json \
-            --report-path security-reports/gitleaks.json \
+            --report-path reports/gitleaks.json \
             --exit-code 0
 
-          if [ ! -f security-reports/gitleaks.json ]; then
-            echo '[]' > security-reports/gitleaks.json
-          fi
-
-
-      # =====================================================
-      # 11. Evaluate using CENTRAL security logic
-      # =====================================================
-
-      - name: Evaluate security gate
+      # =================================================
+      # 11. Analyze Security Results
+      # =================================================
+      - name: Analyze security results
+        id: security
         run: |
+          export PYTHONPATH="${GITHUB_WORKSPACE}/.security-platform"
+
           python - <<'PY'
+          from pathlib import Path
           import json
           import sys
-          from pathlib import Path
 
-          central_platform = Path(
-              ".security-platform"
-          ).resolve()
+          from security.parser import parse_reports
+          from security.scoring import calculate_score, calculate_grade
+          from security.policy import evaluate_policy
 
-          sys.path.insert(
-              0,
-              str(central_platform)
+
+          reports = Path("reports")
+
+          bandit_file = reports / "bandit.json"
+          trivy_file = reports / "trivy.json"
+          gitleaks_file = reports / "gitleaks.json"
+
+
+          def ensure_json_file(path, default):
+              if not path.exists() or path.stat().st_size == 0:
+                  path.write_text(
+                      json.dumps(default),
+                      encoding="utf-8"
+                  )
+
+
+          ensure_json_file(
+              bandit_file,
+              {
+                  "results": []
+              }
           )
 
-          from security.parser import (
-              parse_reports,
-              build_summary,
+          ensure_json_file(
+              trivy_file,
+              {
+                  "Results": []
+              }
           )
 
-          from security.scoring import (
-              calculate_score,
-              calculate_grade,
+          ensure_json_file(
+              gitleaks_file,
+              []
           )
 
-          from security.policy import (
-              evaluate_policy,
-          )
-
-          reports = Path(
-              "security-reports"
-          )
-
-          bandit = reports / "bandit.json"
-          trivy = reports / "trivy.json"
-          gitleaks = reports / "gitleaks.json"
 
           findings = parse_reports(
-              bandit,
-              trivy,
-              gitleaks,
+              bandit_file,
+              trivy_file,
+              gitleaks_file
           )
 
-          score = calculate_score(
-              findings
-          )
+          score = calculate_score(findings)
 
-          grade = calculate_grade(
+          grade = calculate_grade(score)
+
+          policy_result = evaluate_policy(
+              findings,
               score
           )
 
-          policy = evaluate_policy(
-              findings,
-              score,
-          )
 
-          summary = build_summary(
-              findings,
-              score,
-              grade,
-              policy,
-          )
+          print("")
+          print("========================================")
+          print("       CENTRAL SECURITY GATE")
+          print("========================================")
+          print(f"Security Score : {score}/100")
+          print(f"Security Grade : {grade}")
+          print(f"Policy Status  : {policy_result['status']}")
+          print(f"Reason         : {policy_result['reason']}")
+          print(f"Total Findings : {len(findings)}")
+          print("========================================")
+          print("")
 
-          output = {
-              "score": score,
-              "grade": grade,
-              "status": policy["status"],
-              "reason": policy["reason"],
-              "findings": len(findings),
-              "scanner_counts": summary[
-                  "scanner_counts"
-              ],
-              "severity_counts": summary[
-                  "severity_counts"
-              ],
-              "findings_details": findings,
-          }
 
-          Path(
-              "security-reports/summary.json"
-          ).write_text(
-              json.dumps(
-                  output,
-                  indent=2,
-                  ensure_ascii=False,
-              ),
-              encoding="utf-8",
-          )
+          if findings:
+              print("Security Findings:")
+              print("")
 
-          print()
-          print(
-              "========================================"
-          )
-          print(
-              "       DEVSECOPS SECURITY GATE"
-          )
-          print(
-              "========================================"
-          )
-          print(
-              f"Score    : {score}/100"
-          )
-          print(
-              f"Grade    : {grade}"
-          )
-          print(
-              f"Status   : {policy['status']}"
-          )
-          print(
-              f"Reason   : {policy['reason']}"
-          )
-          print(
-              f"Findings : {len(findings)}"
-          )
-          print(
-              "========================================"
-          )
-          print()
+              for finding in findings:
+                  print(
+                      f"- [{finding.get('severity', 'UNKNOWN')}] "
+                      f"{finding.get('scanner', 'UNKNOWN')} "
+                      f"{finding.get('rule', finding.get('rule_id', ''))} "
+                      f"{finding.get('message', '')}"
+                  )
 
-          if policy["status"] == "BLOCK":
-              print(
-                  "SECURITY GATE: BLOCK"
-              )
+
+          if policy_result["status"] == "BLOCK":
+              print("")
+              print("❌ SECURITY GATE: BLOCK")
+              print("The repository does not satisfy the security policy.")
               sys.exit(1)
 
-          print(
-              "SECURITY GATE: ALLOW"
-          )
+
+          print("")
+          print("✅ SECURITY GATE: ALLOW")
+          print("The repository satisfies the security policy.")
           PY
 
-
-      # =====================================================
-      # 12. Upload security reports
-      # =====================================================
-
+      # =================================================
+      # 12. Upload Security Reports
+      # =================================================
       - name: Upload security reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: security-report
-          path: security-reports/
-          retention-days: 7
+          name: security-reports
+          path: reports/
+          if-no-files-found: warn
