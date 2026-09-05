@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevSecOps Security Platform</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body data-page="dashboard">
+
+<div class="app">
+
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="brand-icon">S</div>
+            <div>
+                <h1>DevSecOps</h1>
+                <span>Security Platform</span>
+            </div>
+        </div>
+
+        <nav>
+            <a href="/" class="nav-item active">
+                <span>▣</span>
+                Dashboard
+            </a>
+
+            <a href="/dashboard/scan.html" class="nav-item">
+                <span>◉</span>
+                Security Scan
+            </a>
+
+            <a href="/dashboard/history.html" class="nav-item">
+                <span>◷</span>
+                Scan History
+            </a>
+
+            <a href="/dashboard/policy.html" class="nav-item">
+                <span>⚙</span>
+                Security Policy
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <span class="online-dot"></span>
+            Security Engine Online
+        </div>
+    </aside>
+
+
+    <main class="main">
+
+        <header class="topbar">
+            <div>
+                <h2>Dashboard</h2>
+                <p>Central security monitoring for all repositories</p>
+            </div>
+
+            <button class="primary-button" onclick="window.location.href='/dashboard/scan.html'">
+                + Security Scan
+            </button>
+        </header>
+
+
+        <section class="stats-grid">
+
+            <div class="stat-card">
+                <div class="stat-label">Repositories</div>
+                <div class="stat-value" id="total-repositories">0</div>
+                <div class="stat-description">Managed repositories</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-label">Passed</div>
+                <div class="stat-value success-text" id="passed-repositories">0</div>
+                <div class="stat-description">Security requirements passed</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-label">Blocked</div>
+                <div class="stat-value danger-text" id="blocked-repositories">0</div>
+                <div class="stat-description">Repositories requiring attention</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-label">Findings</div>
+                <div class="stat-value" id="total-findings">0</div>
+                <div class="stat-description">Latest security findings</div>
+            </div>
+
+        </section>
+
+
+        <section class="content-section">
+
+            <div class="section-header">
+                <div>
+                    <h3>Repository Security Status</h3>
+                    <p>Latest security result for every repository</p>
+                </div>
+
+                <button class="secondary-button" onclick="scanAllRepositories()">
+                    Scan All Repositories
+                </button>
+            </div>
+
+            <div id="dashboard-message"></div>
+
+            <div id="repositories-container" class="repository-grid">
+                <div class="loading">Loading repositories...</div>
+            </div>
+
+        </section>
+
+
+        <section class="content-section">
+
+            <div class="section-header">
+                <div>
+                    <h3>Latest Security Findings</h3>
+                    <p>Findings from the latest scans</p>
+                </div>
+            </div>
+
+            <div id="latest-findings" class="findings-list">
+                <div class="loading">Loading findings...</div>
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

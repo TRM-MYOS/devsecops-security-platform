@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Policy</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body data-page="policy">
+
+<div class="app">
+
+    <aside class="sidebar">
+
+        <div class="brand">
+            <div class="brand-icon">S</div>
+            <div>
+                <h1>DevSecOps</h1>
+                <span>Security Platform</span>
+            </div>
+        </div>
+
+        <nav>
+            <a href="/" class="nav-item">
+                <span>▣</span>
+                Dashboard
+            </a>
+
+            <a href="/dashboard/scan.html" class="nav-item">
+                <span>◉</span>
+                Security Scan
+            </a>
+
+            <a href="/dashboard/history.html" class="nav-item">
+                <span>◷</span>
+                Scan History
+            </a>
+
+            <a href="/dashboard/policy.html" class="nav-item active">
+                <span>⚙</span>
+                Security Policy
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <span class="online-dot"></span>
+            Security Engine Online
+        </div>
+
+    </aside>
+
+
+    <main class="main">
+
+        <header class="topbar">
+            <div>
+                <h2>Security Policy</h2>
+                <p>Central security rules applied to all repositories</p>
+            </div>
+        </header>
+
+
+        <section class="content-section">
+
+            <div class="section-header">
+                <div>
+                    <h3>Security Gate Policy</h3>
+                    <p>Current rules used to determine ALLOW or BLOCK</p>
+                </div>
+            </div>
+
+
+            <div class="policy-score">
+
+                <div class="policy-icon">✓</div>
+
+                <div>
+                    <span>Minimum Security Score</span>
+                    <strong>60 / 100</strong>
+                </div>
+
+            </div>
+
+
+            <div class="policy-grid">
+
+                <div class="policy-card block">
+                    <div class="policy-level">CRITICAL</div>
+                    <strong>BLOCK</strong>
+                    <p>Critical vulnerabilities block the security gate.</p>
+                </div>
+
+                <div class="policy-card block">
+                    <div class="policy-level">HIGH</div>
+                    <strong>BLOCK</strong>
+                    <p>High severity vulnerabilities block the security gate.</p>
+                </div>
+
+                <div class="policy-card warning">
+                    <div class="policy-level">MEDIUM</div>
+                    <strong>WARN</strong>
+                    <p>Medium severity findings generate a warning.</p>
+                </div>
+
+                <div class="policy-card allow">
+                    <div class="policy-level">LOW</div>
+                    <strong>ALLOW</strong>
+                    <p>Low severity findings do not block the security gate.</p>
+                </div>
+
+            </div>
+
+
+            <div class="policy-flow">
+
+                <div>Repository</div>
+                <span>→</span>
+                <div>Bandit / Trivy / Gitleaks</div>
+                <span>→</span>
+                <div>Score</div>
+                <span>→</span>
+                <div>Policy</div>
+                <span>→</span>
+                <div>ALLOW / BLOCK</div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

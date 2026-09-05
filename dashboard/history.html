@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scan History</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body data-page="history">
+
+<div class="app">
+
+    <aside class="sidebar">
+
+        <div class="brand">
+            <div class="brand-icon">S</div>
+            <div>
+                <h1>DevSecOps</h1>
+                <span>Security Platform</span>
+            </div>
+        </div>
+
+        <nav>
+            <a href="/" class="nav-item">
+                <span>▣</span>
+                Dashboard
+            </a>
+
+            <a href="/dashboard/scan.html" class="nav-item">
+                <span>◉</span>
+                Security Scan
+            </a>
+
+            <a href="/dashboard/history.html" class="nav-item active">
+                <span>◷</span>
+                Scan History
+            </a>
+
+            <a href="/dashboard/policy.html" class="nav-item">
+                <span>⚙</span>
+                Security Policy
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <span class="online-dot"></span>
+            Security Engine Online
+        </div>
+
+    </aside>
+
+
+    <main class="main">
+
+        <header class="topbar">
+            <div>
+                <h2>Scan History</h2>
+                <p>Security scan history across all repositories</p>
+            </div>
+        </header>
+
+
+        <section class="content-section">
+
+            <div class="section-header">
+                <div>
+                    <h3>All Security Scans</h3>
+                    <p>Every scan stored by the security platform</p>
+                </div>
+            </div>
+
+            <div id="history-container">
+                <div class="loading">Loading scan history...</div>
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

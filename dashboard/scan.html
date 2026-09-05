@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Scan</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body data-page="scan">
+
+<div class="app">
+
+    <aside class="sidebar">
+
+        <div class="brand">
+            <div class="brand-icon">S</div>
+            <div>
+                <h1>DevSecOps</h1>
+                <span>Security Platform</span>
+            </div>
+        </div>
+
+        <nav>
+            <a href="/" class="nav-item">
+                <span>▣</span>
+                Dashboard
+            </a>
+
+            <a href="/dashboard/scan.html" class="nav-item active">
+                <span>◉</span>
+                Security Scan
+            </a>
+
+            <a href="/dashboard/history.html" class="nav-item">
+                <span>◷</span>
+                Scan History
+            </a>
+
+            <a href="/dashboard/policy.html" class="nav-item">
+                <span>⚙</span>
+                Security Policy
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <span class="online-dot"></span>
+            Security Engine Online
+        </div>
+
+    </aside>
+
+
+    <main class="main">
+
+        <header class="topbar">
+            <div>
+                <h2>Security Scan</h2>
+                <p>Scan repositories using the central security engine</p>
+            </div>
+        </header>
+
+
+        <section class="content-section">
+
+            <div class="section-header">
+                <div>
+                    <h3>Add Repository</h3>
+                    <p>Add a public GitHub repository to the security platform</p>
+                </div>
+            </div>
+
+            <div class="scan-form">
+
+                <input
+                    type="text"
+                    id="repo-url"
+                    placeholder="https://github.com/owner/repository"
+                >
+
+                <button class="primary-button" id="add-repository-button">
+                    Add Repository
+                </button>
+
+            </div>
+
+            <div id="add-message"></div>
+
+        </section>
+
+
+        <section class="content-section">
+
+            <div class="section-header">
+                <div>
+                    <h3>Run Security Scan</h3>
+                    <p>Select a repository or scan all repositories</p>
+                </div>
+            </div>
+
+
+            <div class="scan-form">
+
+                <select id="repository-select">
+                    <option value="">Select repository</option>
+                </select>
+
+                <button class="primary-button" id="scan-button">
+                    Scan Repository
+                </button>
+
+                <button class="secondary-button" id="scan-all-button">
+                    Scan All
+                </button>
+
+            </div>
+
+            <div id="scan-message"></div>
+
+        </section>
+
+
+        <section id="scan-result-section" class="content-section hidden">
+
+            <div class="section-header">
+                <div>
+                    <h3>Security Scan Result</h3>
+                    <p id="result-repository"></p>
+                </div>
+
+                <span id="result-status" class="status-badge"></span>
+            </div>
+
+
+            <div class="result-stats">
+
+                <div class="result-stat">
+                    <span>Security Score</span>
+                    <strong id="result-score">-</strong>
+                </div>
+
+                <div class="result-stat">
+                    <span>Grade</span>
+                    <strong id="result-grade">-</strong>
+                </div>
+
+                <div class="result-stat">
+                    <span>Findings</span>
+                    <strong id="result-findings">-</strong>
+                </div>
+
+            </div>
+
+
+            <div class="scanner-grid">
+
+                <div class="scanner-card">
+                    <span>Bandit</span>
+                    <strong id="result-bandit">0</strong>
+                </div>
+
+                <div class="scanner-card">
+                    <span>Trivy</span>
+                    <strong id="result-trivy">0</strong>
+                </div>
+
+                <div class="scanner-card">
+                    <span>Gitleaks</span>
+                    <strong id="result-gitleaks">0</strong>
+                </div>
+
+            </div>
+
+
+            <div class="severity-grid">
+
+                <div>
+                    <span>Critical</span>
+                    <strong id="result-critical">0</strong>
+                </div>
+
+                <div>
+                    <span>High</span>
+                    <strong id="result-high">0</strong>
+                </div>
+
+                <div>
+                    <span>Medium</span>
+                    <strong id="result-medium">0</strong>
+                </div>
+
+                <div>
+                    <span>Low</span>
+                    <strong id="result-low">0</strong>
+                </div>
+
+            </div>
+
+
+            <div>
+                <h3>Findings</h3>
+                <div id="result-findings-list" class="findings-list"></div>
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

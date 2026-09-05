@@ -1,0 +1,41 @@
+@"
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+.venv/
+venv/
+env/
+ENV/
+
+# Pytest
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Logs / temporary files
+*.log
+*.tmp
+
+# Security scanner reports
+reports/
+projects.json
+"@ | Set-Content .gitignore
+
+# SQLite database
+*.db
+*.sqlite
+*.sqlite3

@@ -1,0 +1,8 @@
+policy:
+  minimum_score: 60
+
+severity:
+  critical: BLOCK
+  high: BLOCK
+  medium: WARN
+  low: ALLOW
