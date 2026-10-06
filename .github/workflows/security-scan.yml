@@ -2,9 +2,6 @@ name: Central Security Gate
 
 on:
   workflow_call:
-    secrets:
-      CENTRAL_REPO_TOKEN:
-        required: true
 
 permissions:
   contents: read
@@ -15,7 +12,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
       # =================================================
       # 1. Checkout repository ที่เรียกใช้ Workflow
       # =================================================
@@ -33,7 +29,7 @@ jobs:
           python-version: "3.13"
 
       # =================================================
-      # 3. Install Python security tools
+      # 3. Install Python Security Tools
       # =================================================
       - name: Install Python dependencies
         run: |
@@ -70,7 +66,6 @@ jobs:
             -O /tmp/gitleaks.tar.gz
 
           tar -xzf /tmp/gitleaks.tar.gz -C /tmp
-
           sudo mv /tmp/gitleaks /usr/local/bin/gitleaks
 
           gitleaks version
@@ -78,19 +73,18 @@ jobs:
       # =================================================
       # 6. Checkout Central Security Platform
       # =================================================
-      # Central repository เป็น Private
-      # ใช้ CENTRAL_REPO_TOKEN สำหรับ Read-only access
+      # Central repository เป็น Public
+      # ไม่จำเป็นต้องใช้ Personal Access Token
       # =================================================
       - name: Checkout central security platform
         uses: actions/checkout@v4
         with:
           repository: TRM-MYOS/devsecops-security-platform
           ref: main
-          token: ${{ secrets.CENTRAL_REPO_TOKEN }}
           path: .security-platform
 
       # =================================================
-      # 7. Prepare report directory
+      # 7. Prepare Report Directory
       # =================================================
       - name: Prepare reports
         run: |
@@ -118,6 +112,8 @@ jobs:
             --format json \
             --output reports/trivy.json \
             --scanners vuln,secret,misconfig \
+            --skip-dirs .git \
+            --skip-dirs .security-platform \
             .
 
       # =================================================
@@ -189,7 +185,6 @@ jobs:
           )
 
           score = calculate_score(findings)
-
           grade = calculate_grade(score)
 
           policy_result = evaluate_policy(
@@ -224,12 +219,27 @@ jobs:
           if policy_result["status"] == "BLOCK":
               print("")
               print("❌ SECURITY GATE: BLOCK")
-              print("The repository does not satisfy the security policy.")
+              print(
+                  "The repository does not satisfy "
+                  "the security policy."
+              )
               sys.exit(1)
+
+          elif policy_result["status"] == "WARN":
+              print("")
+              print("⚠️ SECURITY GATE: WARN")
+              print(
+                  "Security issues were detected, "
+                  "but the repository is allowed."
+              )
+              sys.exit(0)
 
           print("")
           print("✅ SECURITY GATE: ALLOW")
-          print("The repository satisfies the security policy.")
+          print(
+              "The repository satisfies "
+              "the security policy."
+          )
           PY
 
       # =================================================
