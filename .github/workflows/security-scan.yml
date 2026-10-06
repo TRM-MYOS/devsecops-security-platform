@@ -2,6 +2,9 @@ name: Central Security Gate
 
 on:
   workflow_call:
+    secrets:
+      CENTRAL_REPO_TOKEN:
+        required: true
 
 permissions:
   contents: read
@@ -75,14 +78,15 @@ jobs:
       # =================================================
       # 6. Checkout Central Security Platform
       # =================================================
-      # Central repository เป็น Public แล้ว
-      # จึงไม่ต้องใช้ CENTRAL_REPO_TOKEN
+      # Central repository เป็น Private
+      # ใช้ CENTRAL_REPO_TOKEN สำหรับ Read-only access
       # =================================================
       - name: Checkout central security platform
         uses: actions/checkout@v4
         with:
           repository: TRM-MYOS/devsecops-security-platform
           ref: main
+          token: ${{ secrets.CENTRAL_REPO_TOKEN }}
           path: .security-platform
 
       # =================================================
@@ -146,13 +150,11 @@ jobs:
           from security.scoring import calculate_score, calculate_grade
           from security.policy import evaluate_policy
 
-
           reports = Path("reports")
 
           bandit_file = reports / "bandit.json"
           trivy_file = reports / "trivy.json"
           gitleaks_file = reports / "gitleaks.json"
-
 
           def ensure_json_file(path, default):
               if not path.exists() or path.stat().st_size == 0:
@@ -160,7 +162,6 @@ jobs:
                       json.dumps(default),
                       encoding="utf-8"
                   )
-
 
           ensure_json_file(
               bandit_file,
@@ -181,7 +182,6 @@ jobs:
               []
           )
 
-
           findings = parse_reports(
               bandit_file,
               trivy_file,
@@ -197,7 +197,6 @@ jobs:
               score
           )
 
-
           print("")
           print("========================================")
           print("       CENTRAL SECURITY GATE")
@@ -209,7 +208,6 @@ jobs:
           print(f"Total Findings : {len(findings)}")
           print("========================================")
           print("")
-
 
           if findings:
               print("Security Findings:")
@@ -223,13 +221,11 @@ jobs:
                       f"{finding.get('message', '')}"
                   )
 
-
           if policy_result["status"] == "BLOCK":
               print("")
               print("❌ SECURITY GATE: BLOCK")
               print("The repository does not satisfy the security policy.")
               sys.exit(1)
-
 
           print("")
           print("✅ SECURITY GATE: ALLOW")
