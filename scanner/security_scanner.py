@@ -64,8 +64,7 @@ def run_gitleaks(target_path, output_path):
     return run_command(
         [
             "gitleaks",
-            "detect",
-            "--source",
+            "dir",
             str(target_path),
             "--redact",
             "--report-format",
