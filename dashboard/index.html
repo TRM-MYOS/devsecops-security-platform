@@ -1,138 +1,167 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DevSecOps Security Platform</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-
-<body data-page="dashboard">
-
-<div class="app">
-
-    <aside class="sidebar">
-        <div class="brand">
-            <div class="brand-icon">S</div>
-            <div>
-                <h1>DevSecOps</h1>
-                <span>Security Platform</span>
-            </div>
-        </div>
-
-        <nav>
-            <a href="/" class="nav-item active">
-                <span>▣</span>
-                Dashboard
-            </a>
-
-            <a href="/dashboard/scan.html" class="nav-item">
-                <span>◉</span>
-                Security Scan
-            </a>
-
-            <a href="/dashboard/history.html" class="nav-item">
-                <span>◷</span>
-                Scan History
-            </a>
-
-            <a href="/dashboard/policy.html" class="nav-item">
-                <span>⚙</span>
-                Security Policy
-            </a>
-        </nav>
-
-        <div class="sidebar-footer">
-            <span class="online-dot"></span>
-            Security Engine Online
-        </div>
-    </aside>
-
-
-    <main class="main">
-
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Dashboard / DevSecOps</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body data-page="dashboard">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <div id="auth-check" class="auth-check" role="status">
+      Checking your session...
+    </div>
+    <div class="app" id="protected-app" hidden>
+      <div id="navigation-shell"></div>
+      <main class="main" id="main-content" tabindex="-1">
         <header class="topbar">
-            <div>
-                <h2>Dashboard</h2>
-                <p>Central security monitoring for all repositories</p>
-            </div>
-
-            <button class="primary-button" onclick="window.location.href='/dashboard/scan.html'">
-                + Security Scan
+          <div class="page-title">
+            <button
+              type="button"
+              class="mobile-menu icon-button"
+              id="menu-toggle"
+              aria-label="Open navigation"
+              aria-controls="sidebar"
+              aria-expanded="false"
+            >
+              <svg
+                width="19"
+                height="19"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
             </button>
+            <div>
+              <p class="eyebrow">DEVSECOPS / WORKSPACE</p>
+              <h1>Dashboard</h1>
+              <p class="page-description">
+                A clear view of repository security across your organization.
+              </p>
+            </div>
+          </div>
+          <div class="account-controls">
+            <div
+              class="account-avatar"
+              id="user-avatar"
+              aria-hidden="true"
+            ></div>
+            <div class="account-details">
+              <strong id="current-username"></strong
+              ><span id="current-role"></span>
+            </div>
+            <button
+              type="button"
+              class="secondary-button compact"
+              id="logout-button"
+            >
+              Log out
+            </button>
+          </div>
         </header>
-
-
-        <section class="stats-grid">
-
-            <div class="stat-card">
-                <div class="stat-label">Repositories</div>
-                <div class="stat-value" id="total-repositories">0</div>
-                <div class="stat-description">Managed repositories</div>
-            </div>
-
-            <div class="stat-card">
-                <div class="stat-label">Passed</div>
-                <div class="stat-value success-text" id="passed-repositories">0</div>
-                <div class="stat-description">Security requirements passed</div>
-            </div>
-
-            <div class="stat-card">
-                <div class="stat-label">Blocked</div>
-                <div class="stat-value danger-text" id="blocked-repositories">0</div>
-                <div class="stat-description">Repositories requiring attention</div>
-            </div>
-
-            <div class="stat-card">
-                <div class="stat-label">Findings</div>
-                <div class="stat-value" id="total-findings">0</div>
-                <div class="stat-description">Latest security findings</div>
-            </div>
-
+        <div
+          id="global-message"
+          class="message-region"
+          aria-live="polite"
+        ></div>
+        <section class="overview-banner">
+          <div>
+            <span class="eyebrow">SECURITY OVERVIEW</span>
+            <h2>See what needs your attention.</h2>
+            <p>
+              Review the latest security gate results and investigate findings.
+            </p>
+          </div>
+          <a href="scan.html" class="primary-button" data-role="scan"
+            >New security scan</a
+          >
         </section>
-
-
+        <section class="stats-grid" aria-label="Repository security statistics">
+          <div class="stat-card">
+            <span class="stat-label">Repositories</span
+            ><strong class="stat-value" id="total-repositories">-</strong
+            ><span class="stat-description">Connected projects</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Allowed</span
+            ><strong class="stat-value success-text" id="passed-repositories"
+              >-</strong
+            ><span class="stat-description">Latest gate passed</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Blocked</span
+            ><strong class="stat-value danger-text" id="blocked-repositories"
+              >-</strong
+            ><span class="stat-description">Review required</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Findings</span
+            ><strong class="stat-value" id="total-findings">-</strong
+            ><span class="stat-description">Across latest scans</span>
+          </div>
+        </section>
         <section class="content-section">
-
-            <div class="section-header">
-                <div>
-                    <h3>Repository Security Status</h3>
-                    <p>Latest security result for every repository</p>
-                </div>
-
-                <button class="secondary-button" onclick="scanAllRepositories()">
-                    Scan All Repositories
-                </button>
+          <div class="section-header">
+            <div>
+              <h2>Repository security</h2>
+              <p>The latest stored result for each connected repository.</p>
             </div>
-
-            <div id="dashboard-message"></div>
-
-            <div id="repositories-container" class="repository-grid">
-                <div class="loading">Loading repositories...</div>
+            <div class="actions">
+              <button
+                type="button"
+                class="secondary-button"
+                data-action="reload-dashboard"
+              >
+                Refresh</button
+              ><button
+                type="button"
+                class="primary-button"
+                data-action="scan-all"
+                data-role="scan"
+                data-scan-button
+              >
+                Scan all
+              </button>
             </div>
-
+          </div>
+          <div
+            id="dashboard-message"
+            class="message-region"
+            aria-live="polite"
+          ></div>
+          <div id="repositories-container" class="repository-grid">
+            <div class="loading">Loading repositories...</div>
+          </div>
         </section>
-
-
+        <section
+          id="scan-results"
+          class="content-section"
+          hidden
+          aria-label="Scan results"
+        ></section>
         <section class="content-section">
-
-            <div class="section-header">
-                <div>
-                    <h3>Latest Security Findings</h3>
-                    <p>Findings from the latest scans</p>
-                </div>
+          <div class="section-header">
+            <div>
+              <h2>Latest findings</h2>
+              <p>Details from the five most recent scans.</p>
             </div>
-
-            <div id="latest-findings" class="findings-list">
-                <div class="loading">Loading findings...</div>
-            </div>
-
+            <a class="text-link" href="history.html">View all history</a>
+          </div>
+          <div id="latest-findings" class="findings-list">
+            <div class="loading">Loading findings...</div>
+          </div>
         </section>
-
-    </main>
-
-</div>
-
-<script src="app.js"></script>
-</body>
+        <footer class="main-footer">
+          <span>DevSecOps Security Platform</span
+          ><span>Central security / Clear decisions</span>
+        </footer>
+      </main>
+    </div>
+  </body>
 </html>

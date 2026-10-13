@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Log in / DevSecOps</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body data-page="login" class="login-page">
+    <main class="login-layout">
+      <section class="login-story" aria-label="DevSecOps Security Platform">
+        <a class="brand" href="login.html"
+          ><span class="brand-icon" aria-hidden="true">S</span
+          ><span
+            ><strong>DevSecOps</strong><small>Security Platform</small></span
+          ></a
+        >
+        <div class="story-content">
+          <span class="eyebrow">YOUR SECURITY WORKSPACE</span>
+          <h1>Confidence in every<br />security decision.</h1>
+          <p>
+            One place to monitor repositories, investigate findings, and apply
+            your security policy.
+          </p>
+          <div class="story-tools">
+            <span>Bandit</span><span>Trivy</span><span>Gitleaks</span>
+          </div>
+        </div>
+        <p class="story-footer">
+          Centralized visibility. Access that fits your role.
+        </p>
+      </section>
+      <section class="login-panel">
+        <div class="login-card">
+          <div class="mobile-login-brand">
+            <span class="brand-icon" aria-hidden="true">S</span
+            ><strong>DevSecOps</strong>
+          </div>
+          <span class="eyebrow">WELCOME BACK</span>
+          <h2>Log in to your workspace</h2>
+          <p class="muted">Use the account provided by your Super User.</p>
+          <div
+            id="login-message"
+            class="message-region"
+            aria-live="polite"
+          ></div>
+          <form id="login-form">
+            <div class="form-field">
+              <label for="username">Username</label
+              ><input
+                type="text"
+                id="username"
+                name="username"
+                required
+                autocomplete="username"
+                autocapitalize="none"
+                spellcheck="false"
+                maxlength="64"
+              />
+            </div>
+            <div class="form-field">
+              <label for="password">Password</label
+              ><input
+                type="password"
+                id="password"
+                name="password"
+                required
+                autocomplete="current-password"
+              />
+            </div>
+            <button
+              type="submit"
+              id="login-button"
+              class="primary-button full-width"
+            >
+              Log in <span aria-hidden="true">&rarr;</span>
+            </button>
+          </form>
+          <p class="login-help">
+            Need an account or help signing in?<br />Contact your platform
+            administrator.
+          </p>
+          <div class="login-health">
+            <span class="health-dot" id="health-dot"></span
+            ><span id="health-status">Checking service...</span>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

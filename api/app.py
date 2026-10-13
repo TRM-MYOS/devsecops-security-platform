@@ -2,10 +2,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+from api.auth_routes import router as auth_router
+from auth.settings import Settings
+from auth.web import AuthenticationMiddleware
 
 from repository.repository_manager import (
     RepositoryManager,
@@ -21,9 +26,11 @@ from security.parser import (
 
 from security.policy import (
     evaluate_policy,
+    load_policy_config,
 )
 
 from security.scoring import (
+    SEVERITY_PENALTY,
     calculate_grade,
     calculate_score,
 )
@@ -33,6 +40,7 @@ from security.scoring import (
 # APPLICATION
 # =========================================================
 
+auth_settings = Settings.from_environment()
 app = FastAPI(
     title="DevSecOps Security Platform",
     version="1.0.0",
@@ -40,7 +48,28 @@ app = FastAPI(
         "Central security platform "
         "for multiple repositories"
     ),
+    docs_url="/docs" if auth_settings.environment == "development" else None,
+    redoc_url="/redoc" if auth_settings.environment == "development" else None,
+    openapi_url="/openapi.json" if auth_settings.environment == "development" else None,
 )
+
+app.state.auth_settings = auth_settings
+app.include_router(auth_router)
+app.add_middleware(AuthenticationMiddleware)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(request, error):
+    # FastAPI normally echoes invalid input; login/user payloads contain passwords.
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": [
+                {"loc": issue["loc"], "msg": issue["msg"], "type": issue["type"]}
+                for issue in error.errors()
+            ]
+        },
+    )
 
 
 # =========================================================
@@ -49,10 +78,10 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=list(app.state.auth_settings.allowed_origins),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-CSRF-Token"],
 )
 
 
@@ -119,6 +148,32 @@ def health_check():
     return {
         "status": "healthy",
         "service": "DevSecOps Security Platform",
+    }
+
+
+@app.get("/api/policy")
+def get_security_policy():
+    config = load_policy_config()
+    if not isinstance(config, dict):
+        raise HTTPException(status_code=503, detail="Security policy configuration is invalid")
+    policy = config.get("policy", {})
+    severity = config.get("severity", {})
+    if not isinstance(policy, dict) or not isinstance(severity, dict):
+        raise HTTPException(status_code=503, detail="Security policy configuration is invalid")
+    minimum_by_grade = {}
+    for score in range(101):
+        minimum_by_grade.setdefault(calculate_grade(score), score)
+    grade_bands = [
+        {"grade": grade, "minimum_score": minimum}
+        for grade, minimum in sorted(
+            minimum_by_grade.items(), key=lambda item: item[1], reverse=True
+        )
+    ]
+    return {
+        "policy": policy,
+        "severity": severity,
+        "severity_penalties": dict(SEVERITY_PENALTY),
+        "grade_bands": grade_bands,
     }
 
 

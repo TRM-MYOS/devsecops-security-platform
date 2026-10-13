@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>User Management / DevSecOps</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body data-page="users">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <div id="auth-check" class="auth-check" role="status">
+      Checking your session...
+    </div>
+    <div class="app" id="protected-app" hidden>
+      <div id="navigation-shell"></div>
+      <main class="main" id="main-content" tabindex="-1">
+        <header class="topbar">
+          <div class="page-title">
+            <button
+              type="button"
+              class="mobile-menu icon-button"
+              id="menu-toggle"
+              aria-label="Open navigation"
+              aria-controls="sidebar"
+              aria-expanded="false"
+            >
+              <svg
+                width="19"
+                height="19"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <div>
+              <p class="eyebrow">DEVSECOPS / WORKSPACE</p>
+              <h1>User Management</h1>
+              <p class="page-description">
+                Manage account access and review administrative activity.
+              </p>
+            </div>
+          </div>
+          <div class="account-controls">
+            <div
+              class="account-avatar"
+              id="user-avatar"
+              aria-hidden="true"
+            ></div>
+            <div class="account-details">
+              <strong id="current-username"></strong
+              ><span id="current-role"></span>
+            </div>
+            <button
+              type="button"
+              class="secondary-button compact"
+              id="logout-button"
+            >
+              Log out
+            </button>
+          </div>
+        </header>
+        <div
+          id="global-message"
+          class="message-region"
+          aria-live="polite"
+        ></div>
+        <section class="content-section">
+          <div class="section-header">
+            <div>
+              <h2>Create a user</h2>
+              <p>
+                Account creation is limited to Super Users. Share credentials
+                through your approved channel.
+              </p>
+            </div>
+          </div>
+          <form id="create-user-form" class="create-user-grid">
+            <div class="form-field">
+              <label for="new-username">Username</label
+              ><input
+                id="new-username"
+                name="username"
+                required
+                autocomplete="off"
+                minlength="3"
+                maxlength="64"
+                pattern="[A-Za-z0-9_.\-]+"
+              /><span class="field-hint"
+                >3-64 letters, numbers, underscores, dots, or hyphens.</span
+              >
+            </div>
+            <div class="form-field">
+              <label for="new-password">Initial password</label
+              ><input
+                id="new-password"
+                name="password"
+                type="password"
+                required
+                autocomplete="new-password"
+                minlength="12"
+                maxlength="128"
+              /><span class="field-hint"
+                >12-128 characters. Do not reuse an existing password.</span
+              >
+            </div>
+            <div class="form-field">
+              <label for="new-role">Role</label
+              ><select id="new-role" name="role">
+                <option value="viewer">Viewer</option>
+                <option value="operator">Operator</option>
+                <option value="superuser">Super User</option>
+              </select>
+            </div>
+            <button
+              type="submit"
+              id="create-user-button"
+              class="primary-button"
+            >
+              Create user
+            </button>
+          </form>
+          <div
+            id="user-message"
+            class="message-region"
+            aria-live="polite"
+          ></div>
+        </section>
+        <section class="content-section">
+          <div class="section-header">
+            <div>
+              <h2>User access</h2>
+              <p>
+                Changes take effect for existing sessions. At least one active
+                Super User must remain.
+              </p>
+            </div>
+            <button
+              type="button"
+              class="secondary-button"
+              data-action="reload-users"
+            >
+              Refresh
+            </button>
+          </div>
+          <div id="users-container">
+            <div class="loading">Loading users...</div>
+          </div>
+        </section>
+        <section class="content-section">
+          <div class="section-header">
+            <div>
+              <h2>Administrative activity</h2>
+              <p>An audit trail of account and permission changes.</p>
+            </div>
+          </div>
+          <div id="audit-container">
+            <div class="loading">Loading activity...</div>
+          </div>
+        </section>
+        <footer class="main-footer">
+          <span>DevSecOps Security Platform</span
+          ><span>Central security / Clear decisions</span>
+        </footer>
+      </main>
+    </div>
+  </body>
+</html>
