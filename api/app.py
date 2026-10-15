@@ -391,13 +391,19 @@ def execute_repository_scan(
         # 5. Parse findings
         # -------------------------------------------------
 
-        findings = (
-            parse_reports(
+        # Parser also serves the CLI, where SystemExit is intentional. Convert
+        # it only at this boundary so report failures cannot escape an API call.
+        try:
+            findings = parse_reports(
                 bandit_file,
                 trivy_file,
                 gitleaks_file,
             )
-        )
+        except SystemExit as error:
+            raise HTTPException(
+                status_code=500,
+                detail=str(error) or "Report validation failed",
+            ) from error
 
 
         # -------------------------------------------------
@@ -575,6 +581,12 @@ def execute_repository_scan(
         }
 
 
+    except (OSError, RuntimeError) as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Scan execution failed: {error}",
+        ) from error
+
     finally:
 
         if scan_data is not None:
@@ -679,7 +691,7 @@ def scan_all_repositories():
                     "failed",
 
                 "error":
-                    str(error),
+                    error.detail if isinstance(error, HTTPException) else str(error),
 
             })
 
