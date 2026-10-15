@@ -1,85 +1,106 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scan History</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-
-<body data-page="history">
-
-<div class="app">
-
-    <aside class="sidebar">
-
-        <div class="brand">
-            <div class="brand-icon">S</div>
-            <div>
-                <h1>DevSecOps</h1>
-                <span>Security Platform</span>
-            </div>
-        </div>
-
-        <nav>
-            <a href="/" class="nav-item">
-                <span>▣</span>
-                Dashboard
-            </a>
-
-            <a href="/dashboard/scan.html" class="nav-item">
-                <span>◉</span>
-                Security Scan
-            </a>
-
-            <a href="/dashboard/history.html" class="nav-item active">
-                <span>◷</span>
-                Scan History
-            </a>
-
-            <a href="/dashboard/policy.html" class="nav-item">
-                <span>⚙</span>
-                Security Policy
-            </a>
-        </nav>
-
-        <div class="sidebar-footer">
-            <span class="online-dot"></span>
-            Security Engine Online
-        </div>
-
-    </aside>
-
-
-    <main class="main">
-
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Scan History / DevSecOps</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body data-page="history">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <div id="auth-check" class="auth-check" role="status">
+      Checking your session...
+    </div>
+    <div class="app" id="protected-app" hidden>
+      <div id="navigation-shell"></div>
+      <main class="main" id="main-content" tabindex="-1">
         <header class="topbar">
+          <div class="page-title">
+            <button
+              type="button"
+              class="mobile-menu icon-button"
+              id="menu-toggle"
+              aria-label="Open navigation"
+              aria-controls="sidebar"
+              aria-expanded="false"
+            >
+              <svg
+                width="19"
+                height="19"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
             <div>
-                <h2>Scan History</h2>
-                <p>Security scan history across all repositories</p>
+              <p class="eyebrow">DEVSECOPS / WORKSPACE</p>
+              <h1>Scan History</h1>
+              <p class="page-description">
+                Inspect past decisions and the evidence behind each security
+                gate.
+              </p>
             </div>
+          </div>
+          <div class="account-controls">
+            <div
+              class="account-avatar"
+              id="user-avatar"
+              aria-hidden="true"
+            ></div>
+            <div class="account-details">
+              <strong id="current-username"></strong
+              ><span id="current-role"></span>
+            </div>
+            <button
+              type="button"
+              class="secondary-button compact"
+              id="logout-button"
+            >
+              Log out
+            </button>
+          </div>
         </header>
-
-
+        <div
+          id="global-message"
+          class="message-region"
+          aria-live="polite"
+        ></div>
         <section class="content-section">
-
-            <div class="section-header">
-                <div>
-                    <h3>All Security Scans</h3>
-                    <p>Every scan stored by the security platform</p>
-                </div>
+          <div class="section-header">
+            <div>
+              <h2>All security scans</h2>
+              <p>Recorded results, including repositories blocked by policy.</p>
             </div>
-
-            <div id="history-container">
-                <div class="loading">Loading scan history...</div>
-            </div>
-
+            <button
+              type="button"
+              class="secondary-button"
+              data-action="reload-history"
+            >
+              Refresh
+            </button>
+          </div>
+          <div id="history-container">
+            <div class="loading">Loading scan history...</div>
+          </div>
         </section>
-
-    </main>
-
-</div>
-
-<script src="app.js"></script>
-</body>
+        <section
+          id="history-detail"
+          class="content-section"
+          hidden
+          tabindex="-1"
+          aria-label="Selected scan findings"
+        ></section>
+        <footer class="main-footer">
+          <span>DevSecOps Security Platform</span
+          ><span>Central security / Clear decisions</span>
+        </footer>
+      </main>
+    </div>
+  </body>
 </html>
