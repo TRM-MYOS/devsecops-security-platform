@@ -1,0 +1,78 @@
+/* User Management: accounts, roles, and administrative activity. */
+/* Original cascade order is retained within this file, including responsive rules. */
+.user-table {
+  min-width: 780px;
+}
+
+.audit-table {
+  min-width: 700px;
+}
+
+.create-user-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 0.8fr auto;
+  gap: 15px;
+  align-items: start;
+}
+
+.create-user-grid .primary-button {
+  margin-top: 27px;
+}
+
+.create-user-grid .form-field {
+  margin: 0;
+}
+
+.user-access-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-access-controls select {
+  min-width: 112px;
+  width: 112px;
+  min-height: 34px;
+  padding: 6px 9px;
+  font-size: 11px;
+}
+
+.you-label {
+  color: var(--muted);
+  font-size: 10px;
+  margin-left: 6px;
+}
+
+@media (max-width: 1180px) {
+  .create-user-grid {
+    grid-template-columns: 1fr 1.2fr;
+  }
+
+  .create-user-grid .primary-button {
+    margin-top: 27px;
+    align-self: start;
+  }
+}
+
+@media (max-width: 900px) {
+  .create-user-grid {
+    grid-template-columns: 1fr 1.4fr 0.8fr;
+  }
+
+  .create-user-grid .primary-button {
+    margin-top: 0;
+    grid-column: 1/-1;
+    justify-self: start;
+  }
+}
+
+@media (max-width: 650px) {
+  .create-user-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .create-user-grid .primary-button {
+    width: 100%;
+    justify-self: stretch;
+  }
+}

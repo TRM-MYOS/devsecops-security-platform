@@ -1,0 +1,274 @@
+/* Dashboard: repository summaries, branch disclosures, and latest findings. */
+/* Original cascade order is retained within this file, including responsive rules. */
+.overview-banner {
+  background: linear-gradient(115deg, #192e50, #223c64);
+  color: #fff;
+  border-radius: var(--radius);
+  padding: 26px 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 25px;
+  margin-bottom: 23px;
+}
+
+.overview-banner .eyebrow {
+  color: #a3bdf1;
+}
+
+.overview-banner h2 {
+  font-size: 23px;
+  margin-bottom: 8px;
+}
+
+.overview-banner p {
+  font-size: 12px;
+  color: #becee4;
+  margin: 0;
+}
+
+.overview-banner .primary-button {
+  flex-shrink: 0;
+  background: #fff;
+  color: #254b86;
+}
+
+.overview-banner .primary-button:hover {
+  background: #e8f0ff;
+}
+
+.stat-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px 23px;
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.stat-value {
+  font-size: 32px;
+  line-height: 1.2;
+  letter-spacing: -0.75px;
+  margin: 10px 0 8px;
+}
+
+.stat-description {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.repository-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.repository-card {
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 19px;
+  min-width: 0;
+}
+
+.repository-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 12px;
+}
+
+.repository-header > div {
+  min-width: 0;
+}
+
+.repository-header h3 {
+  font-size: 14px;
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
+
+.repository-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin: 18px 0 15px;
+}
+
+.repository-stats div {
+  background: #f5f8fc;
+  border-radius: 7px;
+  padding: 10px;
+}
+
+.repository-stats span {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.repository-stats strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 17px;
+}
+
+.repository-reason {
+  font-size: 11px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  margin: 0 0 13px;
+}
+
+.repository-footer {
+  border-top: 1px solid var(--line);
+  padding-top: 13px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.repository-footer > span {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.repository-grid > .loading,
+.repository-grid > .error-box {
+  grid-column: 1/-1;
+}
+
+@media (max-width: 1180px) {
+  .repository-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stat-card {
+    padding: 17px;
+  }
+
+  .stat-description {
+    font-size: 9px;
+  }
+}
+
+@media (max-width: 900px) {
+  .overview-banner {
+    padding: 22px;
+  }
+}
+
+@media (max-width: 650px) {
+  .overview-banner {
+    align-items: start;
+    flex-direction: column;
+    gap: 18px;
+    padding: 23px;
+  }
+
+  .overview-banner h2 {
+    font-size: 21px;
+  }
+
+  .stat-value {
+    font-size: 28px;
+  }
+
+  .stat-card {
+    padding: 16px;
+  }
+
+  .stat-description {
+    font-size: 9px;
+  }
+
+  .repository-card {
+    padding: 15px;
+  }
+
+  .repository-header h3 {
+    font-size: 13px;
+  }
+
+  .repository-stats strong {
+    font-size: 15px;
+  }
+}
+
+@media (max-width: 380px) {
+  .stat-card {
+    padding: 14px;
+  }
+
+  .repository-header {
+    gap: 8px;
+  }
+
+  .repository-stats div {
+    padding: 9px;
+  }
+}
+
+.stat-card {
+  position: relative;
+  padding-left: 84px;
+}
+
+.stat-icon {
+  position: absolute;
+  top: 24px;
+  left: 22px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #edf3ff;
+  color: var(--blue);
+}
+
+.stat-icon .ui-icon {
+  width: 26px;
+  height: 26px;
+}
+
+.stat-icon.block,
+.stat-icon.error {
+  background: #fff0f2;
+  color: #d52c43;
+}
+
+.heading-icon {
+  display: grid;
+  place-items: center;
+  background: #edf3ff;
+  color: var(--blue);
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+}
+
+[data-action="reload-dashboard"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 600px) {
+  .stat-card {
+    padding-left: 64px;
+  }
+
+  .stat-icon {
+    left: 14px;
+    width: 36px;
+    height: 36px;
+  }
+}

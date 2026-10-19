@@ -10,6 +10,7 @@ jobs:
   security-scan:
     name: Run Central Security Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 40
 
     steps:
       - name: Checkout target repository
@@ -17,6 +18,7 @@ jobs:
         with:
           fetch-depth: 0
           path: target
+          persist-credentials: false
 
       - name: Run Central Security Gate
         uses: TRM-MYOS/devsecops-security-platform@main

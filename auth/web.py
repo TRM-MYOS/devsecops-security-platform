@@ -13,6 +13,20 @@ from auth.service import get_session, valid_csrf
 READ_ROLES = frozenset({"superuser", "operator", "viewer"})
 WRITE_ROLES = frozenset({"superuser", "operator"})
 
+# Keep exact public asset paths so filesystem aliases cannot bypass the existing
+# page/role checks when serving the split frontend files.
+DASHBOARD_ASSETS = frozenset({
+    "/dashboard/scripts/common.js", "/dashboard/scripts/login.js",
+    "/dashboard/scripts/dashboard.js", "/dashboard/scripts/monitoring.js",
+    "/dashboard/scripts/history.js", "/dashboard/scripts/policy.js",
+    "/dashboard/scripts/users.js",
+    "/dashboard/css/base.css", "/dashboard/css/layout.css",
+    "/dashboard/css/components.css", "/dashboard/css/login.css",
+    "/dashboard/css/dashboard.css", "/dashboard/css/monitoring.css",
+    "/dashboard/css/history.css", "/dashboard/css/policy.css",
+    "/dashboard/css/users.css",
+})
+
 
 def _error(detail: str, status: int):
     return JSONResponse(
@@ -33,9 +47,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         # StaticFiles normalizes separators and dot segments before looking up a file.
         # Use the same canonical target for page-specific authorization on Windows.
         dashboard_target = posixpath.normpath(path.replace("\\", "/")).casefold()
-        public_page = path in {
-            "/dashboard/login.html", "/dashboard/style.css", "/dashboard/app.js"
-        }
+        public_page = path == "/dashboard/login.html" or path in DASHBOARD_ASSETS
         public_auth = path in {"/api/auth/csrf", "/api/auth/login"}
 
         if method == "OPTIONS":
@@ -76,14 +88,13 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 if origin and origin != own_origin and origin not in settings.allowed_origins:
                     return _error("Untrusted request origin", 403)
 
-        # A small, flat dashboard has a fixed set of public assets and HTML pages.
+        # The dashboard has a fixed set of public assets and HTML pages.
         # Reject filesystem aliases (including Windows short names/ADS) altogether.
         dashboard_paths = {
             "/dashboard", "/dashboard/", "/dashboard/index.html",
             "/dashboard/login.html", "/dashboard/scan.html", "/dashboard/history.html",
             "/dashboard/policy.html", "/dashboard/users.html",
-            "/dashboard/style.css", "/dashboard/app.js",
-        }
+        } | DASHBOARD_ASSETS
         if dashboard_page and path not in dashboard_paths:
             return _error("Page not found", 404)
 

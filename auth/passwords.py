@@ -14,8 +14,8 @@ _DUMMY_HASH = PASSWORD_HASHER.hash(secrets.token_urlsafe(32))
 
 
 def hash_password(password: str) -> str:
-    if not 12 <= len(password) <= 128:
-        raise ValueError("Password must contain between 12 and 128 characters")
+    if not 8 <= len(password) <= 128:
+        raise ValueError("Password must contain between 8 and 128 characters")
     return PASSWORD_HASHER.hash(password)
 
 

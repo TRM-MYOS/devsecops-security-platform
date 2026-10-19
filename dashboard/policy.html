@@ -5,8 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
     <title>Security Policy / DevSecOps</title>
-    <link rel="stylesheet" href="style.css" />
-    <script src="app.js" defer></script>
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/layout.css" />
+    <link rel="stylesheet" href="css/components.css" />
+    <link rel="stylesheet" href="css/policy.css" />
+    <script src="scripts/common.js" defer></script>
+    <script src="scripts/policy.js" defer></script>
   </head>
   <body data-page="policy">
     <a class="skip-link" href="#main-content">Skip to content</a>
@@ -38,13 +42,19 @@
                 <path d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <div>
-              <p class="eyebrow">DEVSECOPS / WORKSPACE</p>
-              <h1>Security Policy</h1>
-              <p class="page-description">
-                Read the current security rules. Changes are managed in the
-                policy configuration.
-              </p>
+            <div class="page-heading">
+              <span
+                class="page-heading-icon"
+                data-ui-icon="shield"
+                aria-hidden="true"
+              ></span>
+              <div class="page-heading-copy">
+                <h1 class="page-heading-title">Security Policy</h1>
+                <p class="page-description">
+                  Read the current security rules. Changes are managed in the
+                  policy configuration.
+                </p>
+              </div>
             </div>
           </div>
           <div class="account-controls">

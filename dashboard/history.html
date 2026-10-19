@@ -5,8 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
     <title>Scan History / DevSecOps</title>
-    <link rel="stylesheet" href="style.css" />
-    <script src="app.js" defer></script>
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/layout.css" />
+    <link rel="stylesheet" href="css/components.css" />
+    <link rel="stylesheet" href="css/history.css" />
+    <script src="scripts/common.js" defer></script>
+    <script src="scripts/history.js" defer></script>
   </head>
   <body data-page="history">
     <a class="skip-link" href="#main-content">Skip to content</a>
@@ -38,13 +42,18 @@
                 <path d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <div>
-              <p class="eyebrow">DEVSECOPS / WORKSPACE</p>
-              <h1>Scan History</h1>
-              <p class="page-description">
-                Inspect past decisions and the evidence behind each security
-                gate.
-              </p>
+            <div class="page-heading">
+              <span
+                class="page-heading-icon"
+                data-ui-icon="history"
+                aria-hidden="true"
+              ></span>
+              <div class="page-heading-copy">
+                <h1 class="page-heading-title">Scan History</h1>
+                <p class="page-description">
+                  Review past security decisions by repository and branch.
+                </p>
+              </div>
             </div>
           </div>
           <div class="account-controls">
@@ -71,19 +80,55 @@
           class="message-region"
           aria-live="polite"
         ></div>
-        <section class="content-section">
+        <section
+          id="history-scope"
+          class="history-scope"
+          aria-label="Repository and branch navigation"
+        ></section>
+        <section
+          id="history-stats"
+          class="stats-grid history-stats"
+          aria-label="Historical scan statistics"
+        ></section>
+        <p id="history-stats-scope" class="muted">
+          Historical records in the current repository and branch scope.
+        </p>
+        <section class="content-section history-panel">
           <div class="section-header">
             <div>
               <h2>All security scans</h2>
-              <p>Recorded results, including repositories blocked by policy.</p>
+              <p>Results for recorded commits.</p>
             </div>
             <button
               type="button"
               class="secondary-button"
               data-action="reload-history"
             >
-              Refresh
+              <span data-ui-icon="refresh" aria-hidden="true"></span> Refresh
             </button>
+          </div>
+          <div class="history-toolbar" aria-label="Filter scan history">
+            <label class="history-search"
+              >Search<span class="search-input"
+                ><span data-ui-icon="search" aria-hidden="true"></span
+                ><input
+                  type="search"
+                  id="history-search"
+                  placeholder="Search repository, branch or commit" /></span
+            ></label>
+            <label
+              >Repository<select id="history-repository-filter">
+                <option value="">All repositories</option>
+              </select></label
+            >
+            <label
+              >Gate<select id="history-gate-filter">
+                <option value="">All statuses</option>
+                <option value="ALLOW">ALLOW</option>
+                <option value="BLOCK">BLOCK</option>
+                <option value="OTHER">Other / Not evaluated</option>
+              </select></label
+            >
           </div>
           <div id="history-container">
             <div class="loading">Loading scan history...</div>

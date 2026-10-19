@@ -4,9 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
-    <title>Security Scan / DevSecOps</title>
-    <link rel="stylesheet" href="style.css" />
-    <script src="app.js" defer></script>
+    <title>Repository Monitoring / DevSecOps</title>
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/layout.css" />
+    <link rel="stylesheet" href="css/components.css" />
+    <link rel="stylesheet" href="css/monitoring.css" />
+    <script src="scripts/common.js" defer></script>
+    <script src="scripts/monitoring.js" defer></script>
   </head>
   <body data-page="scan">
     <a class="skip-link" href="#main-content">Skip to content</a>
@@ -38,12 +42,19 @@
                 <path d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <div>
-              <p class="eyebrow">DEVSECOPS / WORKSPACE</p>
-              <h1>Security Scan</h1>
-              <p class="page-description">
-                Connect repositories and run Bandit, Trivy, and Gitleaks.
-              </p>
+            <div class="page-heading">
+              <span
+                class="page-heading-icon"
+                data-ui-icon="shield"
+                aria-hidden="true"
+              ></span>
+              <div class="page-heading-copy">
+                <h1 class="page-heading-title">Repository Monitoring</h1>
+                <p class="page-description">
+                  Connect a repository once. Follow security results across its
+                  branches.
+                </p>
+              </div>
             </div>
           </div>
           <div class="account-controls">
@@ -65,6 +76,13 @@
             </button>
           </div>
         </header>
+
+        <nav class="breadcrumbs monitoring-breadcrumbs" aria-label="Breadcrumb">
+          <a href="index.html"><span data-ui-icon="home"></span>Dashboard</a>
+          <span aria-hidden="true">&rsaquo;</span>
+          <span aria-current="page">Repository Monitoring</span>
+        </nav>
+
         <div
           id="global-message"
           class="message-region"
@@ -72,87 +90,200 @@
         ></div>
         <div id="viewer-notice" class="message info" hidden>
           You have read-only access. An Operator or Super User can add
-          repositories and run scans.
+          repositories and synchronize GitHub Actions results.
         </div>
-        <section class="content-section" data-role="scan">
-          <div class="section-header">
-            <div>
-              <span class="eyebrow">01 / CONNECT</span>
-              <h2>Add a repository</h2>
-              <p>
-                Repositories must belong to the authorized GitHub organization.
+        <div class="monitoring-layout">
+          <div class="monitoring-primary">
+            <section
+              class="content-section monitoring-card"
+              data-role="scan"
+              aria-labelledby="connect-heading"
+            >
+              <div class="section-header">
+                <span class="monitoring-step" aria-hidden="true">1</span>
+                <div>
+                  <h2 id="connect-heading">Connect a repository</h2>
+                  <p>
+                    Add a GitHub repository owned by the authorized account.
+                  </p>
+                </div>
+              </div>
+              <form id="add-repository-form">
+                <label for="repo-url">GitHub repository URL</label>
+                <div class="monitoring-form-row">
+                  <div class="monitoring-input">
+                    <span data-ui-icon="link"></span>
+                    <input
+                      type="url"
+                      id="repo-url"
+                      name="repo_url"
+                      placeholder="https://github.com/TRM-MYOS/repository"
+                      required
+                      autocomplete="off"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    class="primary-button"
+                    id="add-repository-button"
+                  >
+                    <span data-ui-icon="plus"></span>Add repository
+                  </button>
+                </div>
+              </form>
+              <p class="monitoring-helper">
+                <span data-ui-icon="branch"></span>All branches are discovered
+                automatically. No manual branch entry.
               </p>
-            </div>
+              <div
+                id="add-message"
+                class="message-region"
+                aria-live="polite"
+              ></div>
+            </section>
+            <section
+              class="content-section monitoring-card"
+              aria-labelledby="sync-heading"
+            >
+              <div class="section-header">
+                <span class="monitoring-step" aria-hidden="true">2</span>
+                <div>
+                  <h2 id="sync-heading">Sync security results</h2>
+                  <p>
+                    Read results from your repository's GitHub Actions workflow.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="secondary-button"
+                  id="scan-all-button"
+                  data-action="scan-all"
+                  data-role="scan"
+                  data-scan-button
+                >
+                  <span data-ui-icon="refresh"></span>Sync all
+                </button>
+              </div>
+              <form id="scan-form">
+                <label for="repository-select">Repository</label>
+                <div class="monitoring-form-row">
+                  <div class="monitoring-input">
+                    <span data-ui-icon="github"></span>
+                    <select id="repository-select" required>
+                      <option value="">Loading repositories...</option>
+                    </select>
+                  </div>
+                  <button
+                    type="submit"
+                    class="primary-button"
+                    id="scan-button"
+                    data-role="scan"
+                    data-scan-button
+                  >
+                    <span data-ui-icon="refresh"></span>Sync results
+                  </button>
+                </div>
+              </form>
+              <div class="monitoring-update-strip">
+                <span data-ui-icon="clock"></span>
+                <span>View refreshes every 5 seconds</span>
+                <span class="monitoring-last-sync" id="monitoring-last-sync"
+                  >No repository selected</span
+                >
+              </div>
+              <div
+                id="scan-message"
+                class="message-region"
+                aria-live="polite"
+              ></div>
+              <section
+                id="scan-results"
+                class="monitoring-results"
+                hidden
+                aria-label="Selected repository branches"
+              ></section>
+            </section>
           </div>
-          <form id="add-repository-form">
-            <label for="repo-url">GitHub repository URL</label>
-            <div class="inline-form">
-              <input
-                type="url"
-                id="repo-url"
-                name="repo_url"
-                placeholder="https://github.com/TRM-MYOS/repository"
-                required
-                autocomplete="off"
-              /><button
-                type="submit"
-                class="primary-button"
-                id="add-repository-button"
+          <aside class="monitoring-sidebar" aria-label="Monitoring guide">
+            <section
+              class="content-section monitoring-card monitoring-guide"
+              aria-labelledby="monitoring-guide-heading"
+            >
+              <h2 id="monitoring-guide-heading">How monitoring works</h2>
+              <ol class="monitoring-timeline">
+                <li>
+                  <span
+                    class="monitoring-guide-icon"
+                    data-ui-icon="link"
+                  ></span>
+                  <div>
+                    <h3><span>1</span>Connect</h3>
+                    <p>Add your repository URL once.</p>
+                  </div>
+                </li>
+                <li>
+                  <span
+                    class="monitoring-guide-icon"
+                    data-ui-icon="settings"
+                  ></span>
+                  <div>
+                    <h3><span>2</span>Push code</h3>
+                    <p>
+                      GitHub Actions runs your security checks when the workflow
+                      is triggered.
+                    </p>
+                  </div>
+                </li>
+                <li>
+                  <span
+                    class="monitoring-guide-icon"
+                    data-ui-icon="chart"
+                  ></span>
+                  <div>
+                    <h3><span>3</span>Review</h3>
+                    <p>Sync results and inspect findings.</p>
+                  </div>
+                </li>
+              </ol>
+              <div class="monitoring-sync-note">
+                <span data-ui-icon="info"></span>
+                <div>
+                  <h3>What does Sync do?</h3>
+                  <p>
+                    Imports available workflow results.<br />It does not start a
+                    new scan.
+                  </p>
+                </div>
+              </div>
+            </section>
+            <section
+              class="content-section monitoring-card monitoring-tools"
+              aria-labelledby="monitoring-tools-heading"
+            >
+              <div class="monitoring-tools-heading">
+                <span data-ui-icon="shield"></span>
+                <div>
+                  <h2 id="monitoring-tools-heading">
+                    Security tools powered by GitHub Actions
+                  </h2>
+                  <p>Results from your existing workflow checks.</p>
+                </div>
+              </div>
+              <ul aria-label="Security scanners">
+                <li><span data-ui-icon="shield"></span>Bandit</li>
+                <li><span data-ui-icon="shield"></span>Trivy</li>
+                <li><span data-ui-icon="settings"></span>Gitleaks</li>
+              </ul>
+            </section>
+            <p class="monitoring-workflow-note">
+              <span data-ui-icon="book"></span
+              ><span
+                >A repository needs a security workflow before results can
+                appear. GitHub App access must also be configured.</span
               >
-                Add repository
-              </button>
-            </div>
-          </form>
-          <div id="add-message" class="message-region" aria-live="polite"></div>
-        </section>
-        <section class="content-section">
-          <div class="section-header">
-            <div>
-              <span class="eyebrow">02 / ASSESS</span>
-              <h2>Run a security scan</h2>
-              <p>
-                A completed scan may still be blocked by the security policy.
-              </p>
-            </div>
-            <span class="tool-label">Bandit / Trivy / Gitleaks</span>
-          </div>
-          <form id="scan-form">
-            <label for="repository-select">Repository</label>
-            <div class="inline-form">
-              <select id="repository-select" required>
-                <option value="">Loading repositories...</option></select
-              ><button
-                type="submit"
-                class="primary-button"
-                id="scan-button"
-                data-role="scan"
-                data-scan-button
-              >
-                Scan repository</button
-              ><button
-                type="button"
-                class="secondary-button"
-                id="scan-all-button"
-                data-action="scan-all"
-                data-role="scan"
-                data-scan-button
-              >
-                Scan all
-              </button>
-            </div>
-          </form>
-          <div
-            id="scan-message"
-            class="message-region"
-            aria-live="polite"
-          ></div>
-        </section>
-        <section
-          id="scan-results"
-          class="content-section"
-          hidden
-          aria-label="Scan results"
-        ></section>
+            </p>
+          </aside>
+        </div>
         <footer class="main-footer">
           <span>DevSecOps Security Platform</span
           ><span>Central security / Clear decisions</span>

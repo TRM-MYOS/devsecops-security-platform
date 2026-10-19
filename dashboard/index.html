@@ -5,8 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
     <title>Dashboard / DevSecOps</title>
-    <link rel="stylesheet" href="style.css" />
-    <script src="app.js" defer></script>
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/layout.css" />
+    <link rel="stylesheet" href="css/components.css" />
+    <link rel="stylesheet" href="css/dashboard.css" />
+    <script src="scripts/common.js" defer></script>
+    <script src="scripts/dashboard.js" defer></script>
   </head>
   <body data-page="dashboard">
     <a class="skip-link" href="#main-content">Skip to content</a>
@@ -38,12 +42,18 @@
                 <path d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <div>
-              <p class="eyebrow">DEVSECOPS / WORKSPACE</p>
-              <h1>Dashboard</h1>
-              <p class="page-description">
-                A clear view of repository security across your organization.
-              </p>
+            <div class="page-heading">
+              <span
+                class="page-heading-icon"
+                data-ui-icon="home"
+                aria-hidden="true"
+              ></span>
+              <div class="page-heading-copy">
+                <h1 class="page-heading-title">Dashboard</h1>
+                <p class="page-description">
+                  A clear view of repository security across your organization.
+                </p>
+              </div>
             </div>
           </div>
           <div class="account-controls">
@@ -79,54 +89,77 @@
             </p>
           </div>
           <a href="scan.html" class="primary-button" data-role="scan"
-            >New security scan</a
+            >Track repository</a
           >
         </section>
         <section class="stats-grid" aria-label="Repository security statistics">
           <div class="stat-card">
-            <span class="stat-label">Repositories</span
+            <span
+              class="stat-icon database"
+              data-ui-icon="database"
+              aria-hidden="true"
+            ></span
+            ><span class="stat-label">Repositories</span
             ><strong class="stat-value" id="total-repositories">-</strong
             ><span class="stat-description">Connected projects</span>
           </div>
           <div class="stat-card">
-            <span class="stat-label">Allowed</span
+            <span
+              class="stat-icon branch"
+              data-ui-icon="branch"
+              aria-hidden="true"
+            ></span
+            ><span class="stat-label">Monitored branches</span
             ><strong class="stat-value success-text" id="passed-repositories"
               >-</strong
-            ><span class="stat-description">Latest gate passed</span>
+            ><span class="stat-description">Across connected repositories</span>
           </div>
           <div class="stat-card">
-            <span class="stat-label">Blocked</span
+            <span
+              class="stat-icon block"
+              data-ui-icon="block"
+              aria-hidden="true"
+            ></span
+            ><span class="stat-label">Blocked branches</span
             ><strong class="stat-value danger-text" id="blocked-repositories"
               >-</strong
             ><span class="stat-description">Review required</span>
           </div>
           <div class="stat-card">
-            <span class="stat-label">Findings</span
+            <span
+              class="stat-icon error"
+              data-ui-icon="error"
+              aria-hidden="true"
+            ></span
+            ><span class="stat-label">Scan errors</span
             ><strong class="stat-value" id="total-findings">-</strong
-            ><span class="stat-description">Across latest scans</span>
+            ><span class="stat-description">No policy decision available</span>
           </div>
         </section>
         <section class="content-section">
           <div class="section-header">
             <div>
-              <h2>Repository security</h2>
-              <p>The latest stored result for each connected repository.</p>
+              <h2 class="icon-heading">
+                <span data-ui-icon="clock" aria-hidden="true"></span>Latest scan
+                results
+              </h2>
+              <p>
+                Latest imported commit per branch. Page refreshes every 5
+                seconds. GitHub sync runs 30 seconds after each cycle.
+              </p>
+              <span id="dashboard-updated" class="muted"></span>
             </div>
             <div class="actions">
-              <button
-                type="button"
-                class="secondary-button"
-                data-action="reload-dashboard"
-              >
-                Refresh</button
+              <button class="secondary-button" data-action="reload-dashboard">
+                <span data-ui-icon="refresh" aria-hidden="true"></span
+                >Refresh</button
               ><button
-                type="button"
                 class="primary-button"
                 data-action="scan-all"
                 data-role="scan"
                 data-scan-button
               >
-                Scan all
+                Sync all
               </button>
             </div>
           </div>
@@ -135,26 +168,38 @@
             class="message-region"
             aria-live="polite"
           ></div>
-          <div id="repositories-container" class="repository-grid">
-            <div class="loading">Loading repositories...</div>
+          <div id="latest-findings" class="scan-groups">
+            <div class="loading">Loading latest results...</div>
           </div>
         </section>
         <section
           id="scan-results"
           class="content-section"
           hidden
-          aria-label="Scan results"
+          aria-label="Sync results"
         ></section>
         <section class="content-section">
           <div class="section-header">
             <div>
-              <h2>Latest findings</h2>
-              <p>Details from the five most recent scans.</p>
+              <h2 class="icon-heading">
+                <span
+                  class="heading-icon"
+                  data-ui-icon="database"
+                  aria-hidden="true"
+                ></span
+                >Repository security
+              </h2>
+              <p>
+                Connected repositories. Open a repository to explore its
+                branches.
+              </p>
             </div>
-            <a class="text-link" href="history.html">View all history</a>
+            <a class="text-link" href="scan.html" data-role="scan"
+              >Add repository</a
+            >
           </div>
-          <div id="latest-findings" class="findings-list">
-            <div class="loading">Loading findings...</div>
+          <div id="repositories-container">
+            <div class="loading">Loading repositories...</div>
           </div>
         </section>
         <footer class="main-footer">

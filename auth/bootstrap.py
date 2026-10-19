@@ -12,7 +12,7 @@ def main() -> int:
     parser.add_argument("--username", required=True)
     arguments = parser.parse_args()
     try:
-        password = getpass.getpass("Password (12–128 characters): ")
+        password = getpass.getpass("Password (8–128 characters): ")
         confirmation = getpass.getpass("Confirm password: ")
         if password != confirmation:
             raise ValueError("Passwords do not match")

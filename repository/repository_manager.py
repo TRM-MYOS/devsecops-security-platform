@@ -249,9 +249,11 @@ class RepositoryManager:
         status: str,
         reason: str,
         findings: list,
+        connection=None,
     ):
 
-        connection = get_connection()
+        owns_connection = connection is None
+        connection = connection if connection is not None else get_connection()
 
 
         try:
@@ -349,6 +351,7 @@ class RepositoryManager:
                     reason = ?,
                     findings = ?
                 WHERE id = ?
+                  AND (julianday(last_scan) IS NULL OR julianday(last_scan) <= julianday(?))
                 """,
                 (
                     scanned_at,
@@ -358,18 +361,21 @@ class RepositoryManager:
                     reason,
                     len(findings),
                     repository_id,
+                    scanned_at,
                 ),
             )
 
 
-            connection.commit()
+            if owns_connection:
+                connection.commit()
 
 
             return scan_id
 
         finally:
 
-            connection.close()
+            if owns_connection:
+                connection.close()
 
 
     # =====================================================

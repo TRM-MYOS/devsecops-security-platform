@@ -5,8 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
     <title>Log in / DevSecOps</title>
-    <link rel="stylesheet" href="style.css" />
-    <script src="app.js" defer></script>
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/layout.css" />
+    <link rel="stylesheet" href="css/components.css" />
+    <link rel="stylesheet" href="css/login.css" />
+    <script src="scripts/common.js" defer></script>
+    <script src="scripts/login.js" defer></script>
   </head>
   <body data-page="login" class="login-page">
     <main class="login-layout">
@@ -38,9 +42,19 @@
             <span class="brand-icon" aria-hidden="true">S</span
             ><strong>DevSecOps</strong>
           </div>
-          <span class="eyebrow">WELCOME BACK</span>
-          <h2>Log in to your workspace</h2>
-          <p class="muted">Use the account provided by your Super User.</p>
+          <div class="page-heading login-heading">
+            <span
+              class="page-heading-icon"
+              data-ui-icon="shield"
+              aria-hidden="true"
+            ></span>
+            <div class="page-heading-copy">
+              <h2 class="page-heading-title">Log in to your workspace</h2>
+              <p class="page-description">
+                Use the account provided by your Super User.
+              </p>
+            </div>
+          </div>
           <div
             id="login-message"
             class="message-region"
