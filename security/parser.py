@@ -62,6 +62,19 @@ def validate_report(scanner, data):
         for item in data.get("Results", []):
             field(item, "Target", str)
             optional(item, "Vulnerabilities", list)
+            optional(item, "Secrets", list)
+            for secret in item.get("Secrets", []):
+                field(secret, "RuleID", str)
+                field(secret, "Severity", str)
+                require(secret["Severity"] in {"CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"}, "invalid secret Severity")
+                optional(secret, "Title", str)
+                optional(secret, "Category", str)
+                for key in ("StartLine", "EndLine"):
+                    optional(secret, key, int)
+                    if key in secret:
+                        require(secret[key] >= 0, f"{key} must not be negative")
+                if secret.get("StartLine") and secret.get("EndLine"):
+                    require(secret["EndLine"] >= secret["StartLine"], "invalid secret line range")
             for vulnerability in item.get("Vulnerabilities", []):
                 field(vulnerability, "VulnerabilityID", str)
                 field(vulnerability, "Severity", str)
@@ -129,6 +142,16 @@ def parse_trivy(file_path):
 
     for result in data.get("Results", []):
         target = result.get("Target")
+
+        for secret in result.get("Secrets", []):
+            # Match and Code can contain credentials. Never copy them to findings.
+            findings.append({
+                "scanner": "Trivy", "category": "SECRET",
+                "severity": secret["Severity"], "confidence": None,
+                "file": target, "line": secret.get("StartLine") or None,
+                "rule_id": secret["RuleID"], "message": secret.get("Title"),
+                "cwe": None,
+            })
 
         for vulnerability in result.get(
             "Vulnerabilities",

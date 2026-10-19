@@ -1,4 +1,3 @@
-@"
 # Python
 __pycache__/
 *.py[cod]
@@ -33,9 +32,20 @@ Thumbs.db
 # Security scanner reports
 reports/
 projects.json
-"@ | Set-Content .gitignore
 
 # SQLite database
 *.db
 *.sqlite
 *.sqlite3
+
+# Local backups and database sidecars
+backups/
+*.db-wal
+*.db-shm
+*.sqlite-wal
+*.sqlite-shm
+*.db-journal
+
+# Private signing keys (keep outside the repository)
+*.pem
+*.key

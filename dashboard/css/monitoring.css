@@ -1,0 +1,545 @@
+/* Repository Monitoring: connect repositories and display branch sync results. */
+/* Original cascade order is retained within this file, including responsive rules. */
+body[data-page="scan"] {
+  background: linear-gradient(130deg, #f0f6fc, #f7f9fd 65%);
+  font-size: 15px;
+}
+
+.monitoring-breadcrumbs {
+  margin-bottom: 25px;
+}
+
+.monitoring-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2.3fr) minmax(270px, 1fr);
+  align-items: start;
+  gap: 22px;
+}
+
+.monitoring-primary,
+.monitoring-sidebar {
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+}
+
+.monitoring-card.content-section {
+  margin: 0;
+  padding: 25px;
+  border-color: #dbe6f3;
+  box-shadow: 0 4px 16px #243e6305;
+  min-width: 0;
+}
+
+.monitoring-card .section-header {
+  display: flex;
+  flex-direction: row;
+  gap: 17px;
+  align-items: flex-start;
+  margin-bottom: 26px;
+}
+
+.monitoring-card .section-header > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.monitoring-card h2 {
+  font-size: 21px;
+  color: #101e3e;
+}
+
+.monitoring-card .section-header p {
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 4px 0 0;
+}
+
+.monitoring-step {
+  display: grid;
+  place-items: center;
+  background: var(--blue);
+  color: white;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  font-size: 17px;
+  font-weight: 600;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 3px #ffffff15;
+}
+
+.monitoring-card label {
+  font-size: 14px;
+  margin-bottom: 9px;
+}
+
+.monitoring-form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+}
+
+.monitoring-form-row > button {
+  min-width: 145px;
+  font-size: 13px;
+  padding: 12px 16px;
+}
+
+.monitoring-input {
+  position: relative;
+  min-width: 0;
+}
+
+.monitoring-input > [data-ui-icon] {
+  pointer-events: none;
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #3f5780;
+  display: flex;
+}
+
+.monitoring-input > input,
+.monitoring-input > select {
+  min-height: 50px;
+  padding-left: 48px;
+  font-size: 14px;
+  border-color: #cbd9ed;
+}
+
+.monitoring-input > select {
+  padding-right: 30px;
+}
+
+.monitoring-helper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  margin: 22px 0 0;
+}
+
+.monitoring-helper .ui-icon {
+  width: 23px;
+  height: 23px;
+  color: #29436b;
+}
+
+.monitoring-card .section-header > button {
+  flex-shrink: 0;
+  color: var(--blue);
+  padding: 10px 13px;
+}
+
+.monitoring-update-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  background: #edf4fc;
+  padding: 12px 15px;
+  margin-top: 13px;
+  border-radius: 9px;
+  color: #3d5d8a;
+  font-size: 12px;
+}
+
+.monitoring-last-sync {
+  border-left: 1px solid #bed0e7;
+  padding-left: 12px;
+}
+
+.monitoring-card .message-region:not(:empty) {
+  margin-top: 14px;
+}
+
+.monitoring-results {
+  border-top: 1px solid var(--line);
+  margin-top: 20px;
+  padding-top: 20px;
+}
+
+.monitoring-repository-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 13px;
+  margin-bottom: 16px;
+}
+
+.monitoring-repository-heading .repo-identity {
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.monitoring-repository-heading h3 {
+  font-size: 18px;
+  margin: 0;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.monitoring-branch-total {
+  color: #3d5378;
+  background: #edf1f7;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.monitoring-repository-heading .text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.monitoring-repository-heading .text-link .ui-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.monitoring-branches {
+  display: grid;
+  gap: 6px;
+}
+
+.monitoring-branch {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto minmax(78px, 0.4fr) 15px;
+  align-items: center;
+  gap: 13px;
+  text-decoration: none;
+  color: var(--ink);
+  padding: 14px 16px;
+  border: 1px solid #dfe8f3;
+  border-radius: 10px;
+  background: white;
+  min-width: 0;
+}
+
+.monitoring-branch:hover {
+  border-color: #7eacf4;
+  box-shadow: 0 2px 10px #2563eb0b;
+}
+
+.monitoring-branch.block {
+  background: #fff3f4;
+  border-color: #f4dce0;
+}
+
+.monitoring-branch.error,
+.monitoring-branch.warning {
+  background: #fffbf0;
+  border-color: #f0e2b8;
+}
+
+.monitoring-branch > .ui-icon:first-child {
+  color: #2a4269;
+  width: 23px;
+  height: 23px;
+}
+
+.monitoring-branch > .ui-icon:last-child {
+  width: 14px;
+  height: 14px;
+}
+
+.monitoring-branch-identity {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.monitoring-branch-identity > strong {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.monitoring-branch-identity > span {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.monitoring-branch-count {
+  color: #526682;
+  font-size: 12px;
+}
+
+.monitoring-branch .status-badge {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  min-width: 91px;
+  padding: 7px 10px;
+  font-size: 11px;
+}
+
+.monitoring-branch .status-badge .ui-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.monitoring-branch .status-badge.warning {
+  color: #946000;
+  background: #fff0cc;
+}
+
+.monitoring-guide > h2 {
+  font-size: 21px;
+  margin-bottom: 27px;
+}
+
+.monitoring-timeline {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 27px;
+}
+
+.monitoring-timeline > li {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding-bottom: 30px;
+}
+
+.monitoring-timeline > li:last-child {
+  padding-bottom: 0;
+}
+
+.monitoring-timeline > li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 54px;
+  bottom: 8px;
+  left: 23px;
+  border-left: 1px dashed #c5d5ec;
+}
+
+.monitoring-guide-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid #dce8fc;
+  border-radius: 50%;
+  background: #f5f8ff;
+  color: #2c508e;
+  flex-shrink: 0;
+}
+
+.monitoring-guide-icon .ui-icon {
+  width: 23px;
+  height: 23px;
+}
+
+.monitoring-timeline h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  margin: 0 0 5px;
+}
+
+.monitoring-timeline h3 > span {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #eaf1ff;
+  color: #234cac;
+  font-size: 13px;
+}
+
+.monitoring-timeline p {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0 0 0 37px;
+}
+
+.monitoring-sync-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  background: #edf4ff;
+  border: 1px solid #d7e5ff;
+  border-radius: 10px;
+  padding: 18px;
+}
+
+.monitoring-sync-note > [data-ui-icon] {
+  color: var(--blue);
+  display: flex;
+}
+
+.monitoring-sync-note .ui-icon {
+  width: 25px;
+  height: 25px;
+}
+
+.monitoring-sync-note h3 {
+  font-size: 14px;
+  margin: 2px 0 6px;
+}
+
+.monitoring-sync-note p {
+  font-size: 13px;
+  color: #516990;
+  margin: 0;
+}
+
+.monitoring-tools-heading {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.monitoring-tools-heading > [data-ui-icon] {
+  display: flex;
+  color: #233e6a;
+}
+
+.monitoring-tools-heading .ui-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.monitoring-tools h2 {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.monitoring-tools p {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 18px;
+}
+
+.monitoring-tools ul {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+}
+
+.monitoring-tools li {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 11px;
+  padding: 10px 8px;
+  border: 1px solid #d4dfed;
+  border-radius: 8px;
+  background: #f7faff;
+}
+
+.monitoring-tools li .ui-icon {
+  width: 17px;
+  height: 17px;
+}
+
+.monitoring-workflow-note {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0;
+  background: #eaf0f7;
+  border-radius: 12px;
+  padding: 21px;
+  color: #51678a;
+  font-size: 13px;
+}
+
+.monitoring-workflow-note > [data-ui-icon] {
+  display: flex;
+}
+
+@media (max-width: 1250px) {
+  .monitoring-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .monitoring-sidebar {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .monitoring-guide {
+    grid-row: span 2;
+  }
+}
+
+@media (max-width: 650px) {
+  .monitoring-card.content-section {
+    padding: 18px;
+  }
+
+  .monitoring-card .section-header {
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 22px;
+  }
+
+  .monitoring-card .section-header > div {
+    flex-basis: calc(100% - 48px);
+  }
+
+  .monitoring-card .section-header > button {
+    margin-left: auto;
+  }
+
+  .monitoring-card h2 {
+    font-size: 19px;
+  }
+
+  .monitoring-form-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .monitoring-last-sync {
+    border-left: 0;
+    padding-left: 0;
+    flex-basis: 100%;
+  }
+
+  .monitoring-branch {
+    grid-template-columns: 22px minmax(0, 1fr) 16px;
+    gap: 10px;
+    padding: 13px;
+  }
+
+  .monitoring-branch .status-badge {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: start;
+  }
+
+  .monitoring-branch-count {
+    grid-column: 2;
+    grid-row: 3;
+  }
+
+  .monitoring-branch > .ui-icon:last-child {
+    grid-column: 3;
+    grid-row: 1 / 4;
+  }
+
+  .monitoring-sidebar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

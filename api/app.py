@@ -1,5 +1,8 @@
 from datetime import datetime, timezone
 from pathlib import Path
+import os
+import threading
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
@@ -7,6 +10,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from repository import github_monitor
+from repository.github_client import configured as github_configured
+from scanner.repository_scanner import validate_repository
 
 from api.auth_routes import router as auth_router
 from auth.settings import Settings
@@ -41,7 +47,26 @@ from security.scoring import (
 # =========================================================
 
 auth_settings = Settings.from_environment()
+
+
+@asynccontextmanager
+async def lifespan(application):
+    stop = threading.Event()
+    worker = None
+    if os.environ.get("DEVSECOPS_GITHUB_POLL_ENABLED", "true").lower() == "true":
+        worker = threading.Thread(target=github_monitor.poll_repositories,
+                                  args=(repository_manager, stop), daemon=True, name="github-monitor")
+        worker.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        if worker:
+            worker.join(timeout=1)
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="DevSecOps Security Platform",
     version="1.0.0",
     description=(
@@ -188,6 +213,7 @@ def add_repository(
 
     try:
 
+        validate_repository(request.repo_url.strip())
         repository = (
             repository_manager
             .add_repository(
@@ -221,7 +247,7 @@ def get_repositories():
     )
 
     return {
-        "repositories": repositories,
+        "repositories": [dict(repository, tracking=github_monitor.tracking(repository["id"])) for repository in repositories],
         "count": len(repositories),
     }
 
@@ -391,13 +417,19 @@ def execute_repository_scan(
         # 5. Parse findings
         # -------------------------------------------------
 
-        findings = (
-            parse_reports(
+        # Parser also serves the CLI, where SystemExit is intentional. Convert
+        # it only at this boundary so report failures cannot escape an API call.
+        try:
+            findings = parse_reports(
                 bandit_file,
                 trivy_file,
                 gitleaks_file,
             )
-        )
+        except SystemExit as error:
+            raise HTTPException(
+                status_code=500,
+                detail=str(error) or "Report validation failed",
+            ) from error
 
 
         # -------------------------------------------------
@@ -575,6 +607,12 @@ def execute_repository_scan(
         }
 
 
+    except (OSError, RuntimeError) as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Scan execution failed: {error}",
+        ) from error
+
     finally:
 
         if scan_data is not None:
@@ -679,7 +717,7 @@ def scan_all_repositories():
                     "failed",
 
                 "error":
-                    str(error),
+                    error.detail if isinstance(error, HTTPException) else str(error),
 
             })
 
@@ -779,14 +817,24 @@ def get_all_scans():
         .get_all_scans()
     )
 
+    attempts = github_monitor.run_history()
+    invalidated = {(row["repository_id"], row["github"].get("run_id"), row["github"].get("run_attempt")) for row in attempts}
+    records = []
+    for scan in scans:
+        metadata = github_monitor.scan_metadata(scan["id"])
+        if metadata and (scan["repository_id"], metadata.get("run_id"), metadata.get("run_attempt")) in invalidated:
+            continue
+        records.append(dict(scan, github=metadata))
+    records.extend(attempts)
+    records.sort(key=lambda record: record.get("scanned_at") or "", reverse=True)
+
 
     return {
 
-        "scans":
-            scans,
+        "scans": records,
 
         "count":
-            len(scans),
+            len(records),
 
     }
 
@@ -827,6 +875,39 @@ def get_scan_findings(
 # =========================================================
 # LEGACY SCAN
 # =========================================================
+
+class GitHubSyncRequest(BaseModel):
+    branch: str | None = None
+
+
+@app.get("/api/github/status")
+def github_status():
+    return {"configured": github_configured(), "authentication": "github_app"}
+
+
+@app.post("/api/repositories/{repository_id}/sync")
+def sync_github_repository(repository_id: int, request: GitHubSyncRequest | None = None):
+    if repository_manager.get_repository(repository_id) is None:
+        raise HTTPException(status_code=404, detail="Repository not found")
+    try:
+        if request and request.branch:
+            return github_monitor.sync_repository(repository_manager, repository_id, request.branch)
+        return github_monitor.sync_all_branches(repository_manager, repository_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.post("/api/github/sync")
+def sync_github_repositories():
+    results = []
+    for repository in repository_manager.get_repositories():
+        try:
+            result = github_monitor.sync_all_branches(repository_manager, repository["id"])
+        except Exception:
+            result = {"execution_status": "error", "policy_status": None, "message": "Repository synchronization failed"}
+        results.append({"repository_name": repository["name"], **result})
+    return {"results": results, "total": len(results)}
+
 
 @app.post("/scan")
 def legacy_scan(

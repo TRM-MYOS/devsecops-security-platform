@@ -1,14 +1,21 @@
 import argparse
+import os
 import subprocess
 from pathlib import Path
 
 
 def run_command(command):
-    result = subprocess.run(
-        command,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        timeout = int(os.environ.get("DEVSECOPS_SCANNER_TIMEOUT_SECONDS", "600"))
+        if timeout < 1:
+            raise ValueError
+    except ValueError as error:
+        raise RuntimeError("Scanner Failure: DEVSECOPS_SCANNER_TIMEOUT_SECONDS must be a positive integer") from error
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired as error:
+        # Do not echo partial output, which may contain secrets.
+        raise RuntimeError(f"Scanner Failure: {command[0]}: timed out after {timeout} seconds") from error
 
     return {
         "returncode": result.returncode,

@@ -197,6 +197,33 @@ def test_login_me_logout_and_public_user_fields(auth_environment):
         assert client.get("/api/auth/me").status_code == 401
 
 
+@pytest.mark.parametrize("length,expected", [(7, 422), (8, 201), (128, 201), (129, 422)])
+def test_create_user_password_length_boundaries(auth_environment, length, expected):
+    password = "x" * length
+    with TestClient(auth_environment["api"].app) as admin:
+        _, headers = login(admin)
+        response = admin.post(
+            "/api/users",
+            json={"username": "password-boundary-user", "password": password, "role": "viewer"},
+            headers=headers,
+        )
+        assert response.status_code == expected, response.text
+        if expected == 201:
+            with TestClient(auth_environment["api"].app) as user:
+                authenticated, _ = login(user, "password-boundary-user", password)
+                assert authenticated.json()["user"]["role"] == "viewer"
+        else:
+            assert not any(user["username"] == "password-boundary-user" for user in auth_environment["service"].list_users())
+
+
+@pytest.mark.parametrize("length", [0, 7, 129])
+def test_password_storage_rejects_out_of_range_length(length):
+    from auth.passwords import hash_password
+
+    with pytest.raises(ValueError, match="8 and 128"):
+        hash_password("x" * length)
+
+
 def test_login_rotates_anonymous_session_and_csrf(auth_environment):
     with TestClient(auth_environment["api"].app) as client:
         settings = auth_environment["api"].app.state.auth_settings
@@ -412,7 +439,7 @@ def test_login_validation_errors_never_reflect_passwords(auth_environment, paylo
 
 
 @pytest.mark.parametrize("payload", [
-    {"username": "invalid-user", "password": "Secret-7!", "role": "viewer"},
+    {"username": "invalid-user", "password": "Short7!", "role": "viewer"},
     {"password": PASSWORD, "role": "viewer"},
     {"username": "invalid-user", "password": {"sensitive": PASSWORD}, "role": "viewer"},
 ])
@@ -501,6 +528,41 @@ def test_user_management_page_cannot_bypass_role_guard_with_alternate_paths(auth
         login(viewer, "viewer")
         response = viewer.get(path)
         assert response.status_code in (403, 404), (path, response.text[:200])
+
+
+def test_split_frontend_assets_load_before_login_without_exposing_pages_or_apis(auth_environment):
+    from pathlib import Path
+
+    dashboard = Path(__file__).resolve().parents[1] / "dashboard"
+    assets = sorted(
+        f"/dashboard/{file.relative_to(dashboard).as_posix()}"
+        for folder in ("scripts", "css")
+        for file in (dashboard / folder).iterdir()
+        if file.suffix in {".js", ".css"}
+    )
+    assert len(assets) == 16
+    with TestClient(auth_environment["api"].app) as anonymous:
+        for asset in assets:
+            response = anonymous.get(asset, follow_redirects=False)
+            assert response.status_code == 200, asset
+            assert response.headers["x-content-type-options"] == "nosniff"
+            assert response.headers["cache-control"] == "no-store"
+            expected_type = "text/css" if asset.endswith(".css") else "javascript"
+            assert expected_type in response.headers["content-type"], asset
+        assert anonymous.get("/dashboard/history.html", follow_redirects=False).status_code == 303
+        assert anonymous.get("/api/repositories").status_code == 401
+        assert anonymous.get("/api/users").status_code == 401
+
+    with TestClient(auth_environment["api"].app) as viewer:
+        login(viewer, "viewer")
+        for alias in (
+            "/dashboard/scripts/common.js/", "/dashboard/scripts/COMMON.JS",
+            "/dashboard/scripts/common.js::$DATA", "/dashboard/css/base.css.",
+            "/dashboard/scripts/not-allowed.js", "/dashboard/css/not-allowed.css",
+        ):
+            assert viewer.get(alias).status_code == 404, alias
+        assert viewer.get("/dashboard/users.html").status_code == 403
+        assert viewer.get("/api/users").status_code == 403
 
 
 @pytest.mark.parametrize("operation", ["create", "update"])

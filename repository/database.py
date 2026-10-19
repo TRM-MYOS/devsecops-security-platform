@@ -98,6 +98,33 @@ def initialize_database():
                 updated_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS github_tracking (
+                repository_id INTEGER PRIMARY KEY REFERENCES repositories(id) ON DELETE CASCADE,
+                data TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS github_imports (
+                repository_id INTEGER NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+                run_id INTEGER NOT NULL,
+                attempt INTEGER NOT NULL,
+                scan_id INTEGER NOT NULL REFERENCES scans(id) ON DELETE CASCADE,
+                metadata TEXT NOT NULL,
+                PRIMARY KEY (repository_id, run_id, attempt)
+            );
+            CREATE TABLE IF NOT EXISTS github_branches (
+                repository_id INTEGER NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+                branch TEXT NOT NULL,
+                data TEXT NOT NULL,
+                PRIMARY KEY (repository_id, branch)
+            );
+            CREATE TABLE IF NOT EXISTS github_run_history (
+                repository_id INTEGER NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+                run_id INTEGER NOT NULL,
+                attempt INTEGER NOT NULL,
+                scan_id INTEGER REFERENCES scans(id) ON DELETE SET NULL,
+                data TEXT NOT NULL,
+                PRIMARY KEY (repository_id, run_id, attempt)
+            );
+
             CREATE TABLE IF NOT EXISTS auth_sessions (
                 token_hash TEXT PRIMARY KEY,
                 user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
