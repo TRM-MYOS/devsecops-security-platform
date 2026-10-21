@@ -3,6 +3,10 @@
 
 "use strict";
 
+let passwordResetUser = null;
+let passwordResetTrigger = null;
+let passwordResetBusy = false;
+
 async function loadUsers() {
   if (!isSuperUser()) return;
   await Promise.all([loadUserList(), loadAudit()]);
@@ -96,6 +100,8 @@ async function loadUserList() {
                   '">',
                   templateText(user.is_active ? "Disable" : "Enable"),
                   "</button>",
+                  `<button type="button" class="small-button" data-action="reset-user-password" data-id="${escapeHtml(user.id)}" aria-label="Reset password for ${escapeHtml(user.username)}">Reset password</button>`,
+                  `<button type="button" class="danger-button" data-action="delete-user" data-id="${escapeHtml(user.id)}" aria-label="Delete ${escapeHtml(user.username)}" ${user.id === state.user.id ? 'disabled title="You cannot delete your own account"' : ""}>Delete</button>`,
                   "</div>",
                   "</td>",
                   "</tr>",
@@ -117,6 +123,9 @@ async function loadUserList() {
 }
 
 function auditChanges(event) {
+  if (event.action === "user.deleted") return "Account deleted";
+  if (event.action === "user.password_reset")
+    return "Password reset; sessions revoked";
   const labels = [];
   if (event.before?.role !== event.after?.role && event.after?.role)
     labels.push(
@@ -127,7 +136,12 @@ function auditChanges(event) {
     event.before?.is_active !== event.after.is_active
   )
     labels.push(event.after.is_active ? "Account enabled" : "Account disabled");
-  return labels.join(" / ") || "Account created";
+  return (
+    labels.join(" / ") ||
+    (["user.created", "user.bootstrap"].includes(event.action)
+      ? "Account created"
+      : "Account updated")
+  );
 }
 
 async function loadAudit() {
@@ -283,5 +297,122 @@ async function updateUser(id, toggleActive, button) {
     setMessage("user-message", error.message, "error");
   } finally {
     button.disabled = false;
+  }
+}
+
+async function deleteUser(id, button) {
+  if (!isSuperUser() || button.disabled) return;
+  const user = state.users.get(String(id));
+  if (!user || user.id === state.user.id) return;
+  if (
+    !window.confirm(
+      `Permanently delete "${user.username}"? Their sessions will be revoked. This cannot be undone.`,
+    )
+  )
+    return;
+  button.disabled = true;
+  try {
+    await fetchJson(`${API.users}/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+    setMessage(
+      "user-message",
+      `Account "${user.username}" deleted.`,
+      "success",
+    );
+    await loadUsers();
+    el("refresh-users-button").focus();
+  } catch (error) {
+    setMessage("user-message", error.message, "error");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function initializeUserManagement() {
+  el("reset-password-form").addEventListener("submit", submitPasswordReset);
+  el("reset-password-dialog").addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closePasswordReset();
+  });
+}
+
+function openPasswordReset(id, button) {
+  if (!isSuperUser() || passwordResetBusy) return;
+  const user = state.users.get(String(id));
+  if (!user) return;
+  passwordResetUser = user;
+  passwordResetTrigger = button;
+  el("reset-password-form").reset();
+  setMessage("reset-password-message", "");
+  el("reset-password-account").textContent =
+    `Set a new password for "${user.username}". All sessions will be signed out.${user.id === state.user.id ? " You will need to log in again." : ""}`;
+  el("reset-password-dialog").showModal();
+  el("reset-password").focus();
+}
+
+function closePasswordReset() {
+  if (passwordResetBusy) return;
+  el("reset-password-form").reset();
+  setMessage("reset-password-message", "");
+  passwordResetUser = null;
+  el("reset-password-dialog").close();
+  const trigger = passwordResetTrigger;
+  passwordResetTrigger = null;
+  (trigger?.isConnected ? trigger : el("refresh-users-button"))?.focus();
+}
+
+async function submitPasswordReset(event) {
+  event.preventDefault();
+  if (!isSuperUser() || !passwordResetUser || passwordResetBusy) return;
+  const password = el("reset-password").value;
+  const confirmation = el("confirm-reset-password").value;
+  if (Array.from(password).length < 8 || Array.from(password).length > 128) {
+    setMessage(
+      "reset-password-message",
+      "Password must contain between 8 and 128 characters.",
+      "error",
+    );
+    return;
+  }
+  if (password !== confirmation) {
+    setMessage("reset-password-message", "Passwords do not match.", "error");
+    return;
+  }
+  const user = passwordResetUser;
+  const button = el("save-password-button");
+  passwordResetBusy = true;
+  button.disabled = true;
+  button.textContent = "Resetting...";
+  el("cancel-password-button").disabled = true;
+  try {
+    await fetchJson(`${API.users}/${encodeURIComponent(user.id)}/password`, {
+      method: "POST",
+      body: JSON.stringify({ password, confirm_password: confirmation }),
+    });
+    passwordResetBusy = false;
+    closePasswordReset();
+    if (user.id === state.user.id) {
+      state.user = null;
+      state.csrf = null;
+      location.replace("/dashboard/login.html");
+      return;
+    }
+    setMessage(
+      "user-message",
+      `Password reset for "${user.username}". Their sessions have been revoked.`,
+      "success",
+    );
+    await loadUsers();
+    el("refresh-users-button").focus();
+  } catch (error) {
+    el("reset-password-form").reset();
+    setMessage("reset-password-message", error.message, "error");
+    el("reset-password").focus();
+  } finally {
+    passwordResetBusy = false;
+    button.disabled = false;
+    button.textContent = "Reset password";
+    el("cancel-password-button").disabled = false;
   }
 }

@@ -147,12 +147,13 @@
               <h2>User access</h2>
               <p>
                 Changes take effect for existing sessions. At least one active
-                Super User must remain.
+                Super User must remain. You cannot delete your own account.
               </p>
             </div>
             <button
               type="button"
               class="secondary-button"
+              id="refresh-users-button"
               data-action="reload-users"
             >
               Refresh
@@ -173,6 +174,64 @@
             <div class="loading">Loading activity...</div>
           </div>
         </section>
+        <dialog
+          id="reset-password-dialog"
+          class="password-reset-dialog"
+          aria-labelledby="reset-password-title"
+          aria-describedby="reset-password-account"
+        >
+          <form id="reset-password-form">
+            <h2 id="reset-password-title">Reset password</h2>
+            <p id="reset-password-account"></p>
+            <div class="form-field">
+              <label for="reset-password">New password</label>
+              <input
+                id="reset-password"
+                name="password"
+                type="password"
+                required
+                minlength="8"
+                maxlength="128"
+                autocomplete="new-password"
+              />
+              <span class="field-hint">8-128 characters.</span>
+            </div>
+            <div class="form-field">
+              <label for="confirm-reset-password">Confirm password</label>
+              <input
+                id="confirm-reset-password"
+                name="confirm_password"
+                type="password"
+                required
+                minlength="8"
+                maxlength="128"
+                autocomplete="new-password"
+              />
+            </div>
+            <div
+              id="reset-password-message"
+              class="message-region"
+              aria-live="polite"
+            ></div>
+            <div class="password-reset-actions">
+              <button
+                type="button"
+                id="cancel-password-button"
+                class="secondary-button"
+                data-action="close-password-reset"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                id="save-password-button"
+                class="primary-button"
+              >
+                Reset password
+              </button>
+            </div>
+          </form>
+        </dialog>
         <footer class="main-footer">
           <span>DevSecOps Security Platform</span
           ><span>Central security / Clear decisions</span>

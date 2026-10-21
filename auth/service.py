@@ -165,6 +165,53 @@ def update_user(user_id: int, changes: dict, actor_id: int | None = None) -> dic
         return public_user(updated)
 
 
+def delete_user(user_id: int, *, actor_id: int) -> dict | None:
+    with closing(get_connection()) as connection, connection:
+        connection.execute("BEGIN IMMEDIATE")
+        if actor_id is None:
+            raise PermissionError("Insufficient permissions")
+        _check_account_administrator(connection, actor_id)
+        existing = connection.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        if existing is None:
+            return None
+        if existing["role"] == "superuser" and existing["is_active"]:
+            other = connection.execute(
+                "SELECT 1 FROM users WHERE role = 'superuser' AND is_active = 1 AND id != ? LIMIT 1",
+                (user_id,),
+            ).fetchone()
+            if other is None:
+                raise ConflictError("Cannot delete the last active Super User")
+        if user_id == actor_id:
+            raise ConflictError("Cannot delete your own account")
+        _audit(connection, actor_id, existing, "user.deleted", public_user(existing), {})
+        # Foreign keys revoke sessions and detach audit IDs; audit names survive.
+        connection.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        return public_user(existing)
+
+
+def reset_password(user_id: int, password: str, confirm_password: str,
+                   *, actor_id: int) -> dict | None:
+    if password != confirm_password:
+        raise ValueError("Passwords do not match")
+    password_hash = hash_password(password)
+    with closing(get_connection()) as connection, connection:
+        connection.execute("BEGIN IMMEDIATE")
+        if actor_id is None:
+            raise PermissionError("Insufficient permissions")
+        _check_account_administrator(connection, actor_id)
+        existing = connection.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        if existing is None:
+            return None
+        connection.execute(
+            "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?",
+            (password_hash, _timestamp(), user_id),
+        )
+        connection.execute("DELETE FROM auth_sessions WHERE user_id = ?", (user_id,))
+        _audit(connection, actor_id, existing, "user.password_reset", {}, {})
+        updated = connection.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        return public_user(updated)
+
+
 def list_audit_events(limit: int = 200) -> list[dict]:
     with closing(get_connection()) as connection:
         rows = connection.execute(

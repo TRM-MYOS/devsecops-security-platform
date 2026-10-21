@@ -556,6 +556,7 @@ async function startProtectedPage() {
     if (PAGE === "policy") await loadPolicy();
     if (PAGE === "users") {
       el("create-user-form").addEventListener("submit", createUser);
+      initializeUserManagement();
       await loadUsers();
     }
   } catch (error) {
@@ -1006,6 +1007,12 @@ async function dispatchAction(button) {
       return updateUser(id, false, button);
     case "toggle-user":
       return updateUser(id, true, button);
+    case "delete-user":
+      return deleteUser(id, button);
+    case "reset-user-password":
+      return openPasswordReset(id, button);
+    case "close-password-reset":
+      return closePasswordReset();
   }
 }
 

@@ -359,3 +359,145 @@ test('monitoring refresh failure removes stale ALLOW results and disables unavai
   assert.ok(h.node('scan-message').innerHTML.includes('API unavailable'));
   assert.equal(h.node('monitoring-last-sync').textContent, 'Could not refresh repository data');
 });
+
+function usersHarness() {
+  const h = harness('', 'users');
+  h.context.calls = [];
+  h.context.confirmed = true;
+  h.context.window.confirm = () => h.context.confirmed;
+  h.context.location.replace = url => { h.context.redirect = url; };
+  h.context.fixtureUsers = [
+    {id:1, username:'admin', role:'superuser', is_active:true},
+    {id:2, username:'viewer', role:'viewer', is_active:true},
+  ];
+  h.run('state.user={id:1,username:"admin",role:"superuser"}; state.csrf="test-csrf"; state.users=new Map(fixtureUsers.map(u=>[String(u.id),u])); setMessage=(id,text,type)=>{document.getElementById(id).textContent=text;document.getElementById(id).messageType=type;}; fetchJson=async(url,options={})=>{calls.push({url,...options});return url===API.users?{users:fixtureUsers}:url.endsWith("/audit")?{events:[]}:{user:fixtureUsers[1]};};');
+  h.node('reset-password-form').reset = () => {
+    for (const id of ['reset-password', 'confirm-reset-password']) h.node(id).value = '';
+  };
+  h.node('reset-password-dialog').showModal = () => { h.node('reset-password-dialog').open = true; };
+  h.node('reset-password-dialog').close = () => { h.node('reset-password-dialog').open = false; };
+  return h;
+}
+
+test('user controls retain role and disable actions, add reset and prevent self deletion', async () => {
+  const h = usersHarness();
+  h.context.fixtureUsers[1].username = '<img onerror="bad">';
+  await h.run('loadUserList()');
+  const html = h.node('users-container').innerHTML;
+  for (const action of ['save-user-role','toggle-user','reset-user-password','delete-user']) {
+    assert.ok(html.includes('data-action="' + action + '"'));
+  }
+  assert.ok(html.includes('disabled title="You cannot delete your own account"'));
+  assert.ok(html.includes('&lt;img'));
+  assert.ok(!html.includes('<img'));
+  assert.equal(h.run('auditChanges({action:"user.deleted"})'), 'Account deleted');
+  assert.equal(h.run('auditChanges({action:"user.password_reset"})'), 'Password reset; sessions revoked');
+});
+
+test('delete requires confirmation, blocks duplicate requests and refreshes users and audit', async () => {
+  const h = usersHarness();
+  const button = {dataset:{action:'delete-user',id:'2'}, disabled:false};
+  h.context.button = button;
+  h.context.confirmed = false;
+  await h.run('dispatchAction(button)');
+  assert.equal(h.context.calls.length, 0);
+  h.context.confirmed = true;
+  let resolve;
+  h.context.pending = new Promise(done => { resolve = done; });
+  h.run('fetchJson=async(url,options={})=>{calls.push({url,...options});if(options.method==="DELETE")return pending;return url===API.users?{users:fixtureUsers}:{events:[]};}');
+  const request = h.run('dispatchAction(button)');
+  await h.run('dispatchAction(button)');
+  assert.equal(button.disabled, true);
+  assert.equal(h.context.calls.length, 1);
+  assert.equal(h.context.calls[0].url, '/api/users/2');
+  assert.equal(h.context.calls[0].method, 'DELETE');
+  resolve({message:'User deleted'});
+  await request;
+  assert.equal(button.disabled, false);
+  assert.ok(h.context.calls.some(c => c.url === '/api/users'));
+  assert.ok(h.context.calls.some(c => c.url === '/api/users/audit'));
+  assert.equal(h.node('user-message').messageType, 'success');
+});
+
+test('failed deletion keeps user and displays backend error, wrong role cannot dispatch mutations', async () => {
+  const h = usersHarness();
+  h.context.button = {dataset:{action:'delete-user',id:'2'}, disabled:false};
+  h.run('fetchJson=async()=>{throw new Error("Cannot delete the last active Super User")}');
+  await h.run('dispatchAction(button)');
+  assert.equal(h.run('state.users.has("2")'), true);
+  assert.ok(h.node('user-message').textContent.includes('last active Super User'));
+  assert.equal(h.context.button.disabled, false);
+  h.run('state.user.role="viewer";fetchJson=()=>{throw new Error("must not be called")}');
+  await h.run('dispatchAction(button)');
+  h.run('openPasswordReset("2",button)');
+  assert.notEqual(h.node('reset-password-dialog').open, true);
+});
+
+test('reset dialog rejects invalid passwords, clears secrets on cancel and restores focus', async () => {
+  const h = usersHarness();
+  let focused = 0;
+  h.context.trigger = {isConnected:true,focus:()=>{focused++;},dataset:{action:'reset-user-password',id:'2'}};
+  await h.run('dispatchAction(trigger)');
+  assert.equal(h.node('reset-password-dialog').open, true);
+  assert.ok(h.node('reset-password-account').textContent.includes('viewer'));
+  for (const [password,confirmation] of [['Short7!','Short7!'],['x'.repeat(129),'x'.repeat(129)],['new-password-8!','different-password']]) {
+    h.node('reset-password').value = password;
+    h.node('confirm-reset-password').value = confirmation;
+    await h.run('submitPasswordReset({preventDefault(){}})');
+    assert.equal(h.context.calls.length, 0);
+    assert.equal(h.node('reset-password-message').messageType, 'error');
+  }
+  await h.run('dispatchAction({dataset:{action:"close-password-reset"}})');
+  assert.equal(h.node('reset-password-dialog').open, false);
+  assert.equal(h.node('reset-password').value, '');
+  assert.equal(h.node('confirm-reset-password').value, '');
+  assert.equal(focused, 1);
+});
+
+test('reset sends confirmed password, blocks repeat submission and clears form on success', async () => {
+  const h = usersHarness();
+  let resolve;
+  h.context.pending = new Promise(done => { resolve = done; });
+  h.run('openPasswordReset("2",null);fetchJson=async(url,options={})=>{calls.push({url,...options});if(options.method==="POST")return pending;return url===API.users?{users:fixtureUsers}:{events:[]};}');
+  h.node('reset-password').value = h.node('confirm-reset-password').value = 'Replacement-password-8!';
+  const request = h.run('submitPasswordReset({preventDefault(){}})');
+  await h.run('submitPasswordReset({preventDefault(){}})');
+  h.run('closePasswordReset()');
+  assert.equal(h.node('reset-password-dialog').open, true);
+  assert.equal(h.node('save-password-button').disabled, true);
+  assert.equal(h.context.calls.length, 1);
+  assert.equal(h.context.calls[0].url, '/api/users/2/password');
+  assert.deepEqual(JSON.parse(h.context.calls[0].body), {password:'Replacement-password-8!',confirm_password:'Replacement-password-8!'});
+  resolve({user:h.context.fixtureUsers[1]});
+  await request;
+  assert.equal(h.node('reset-password-dialog').open, false);
+  assert.equal(h.node('reset-password').value, '');
+  assert.equal(h.node('save-password-button').disabled, false);
+  assert.ok(h.context.calls.some(c => c.url === '/api/users/audit'));
+  assert.equal(h.node('user-message').messageType, 'success');
+});
+
+test('reset failure clears both passwords and keeps dialog available for correction', async () => {
+  const h = usersHarness();
+  h.run('openPasswordReset("2",null);fetchJson=async()=>{throw new Error("Connection failed")}');
+  h.node('reset-password').value = h.node('confirm-reset-password').value = 'Replacement-password-8!';
+  await h.run('submitPasswordReset({preventDefault(){}})');
+  assert.equal(h.node('reset-password-dialog').open, true);
+  assert.equal(h.node('reset-password').value, '');
+  assert.equal(h.node('confirm-reset-password').value, '');
+  assert.equal(h.node('reset-password-message').textContent, 'Connection failed');
+  assert.equal(h.node('save-password-button').disabled, false);
+  assert.equal(h.node('cancel-password-button').disabled, false);
+});
+
+test('resetting own password redirects to Login and clears browser identity', async () => {
+  const h = usersHarness();
+  h.run('openPasswordReset("1",null)');
+  h.node('reset-password').value = h.node('confirm-reset-password').value = 'Replacement-password-8!';
+  assert.ok(h.node('reset-password-account').textContent.includes('log in again'));
+  await h.run('submitPasswordReset({preventDefault(){}})');
+  assert.equal(h.context.redirect, '/dashboard/login.html');
+  assert.equal(h.run('state.user'), null);
+  assert.equal(h.run('state.csrf'), null);
+  assert.equal(h.node('reset-password').value, '');
+});

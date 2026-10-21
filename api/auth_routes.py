@@ -32,6 +32,12 @@ class UpdateUserRequest(BaseModel):
     is_active: StrictBool | None = None
 
 
+class ResetPasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    password: str = Field(min_length=8, max_length=128)
+    confirm_password: str = Field(min_length=8, max_length=128)
+
+
 @router.get("/auth/csrf")
 def csrf(request: Request, response: Response):
     settings = request.app.state.auth_settings
@@ -102,6 +108,36 @@ def create_user(payload: CreateUserRequest, request: Request):
         raise HTTPException(status_code=403, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+    return {"user": user}
+
+
+@router.delete("/users/{user_id}")
+def delete_user(user_id: int, request: Request):
+    try:
+        user = service.delete_user(user_id, actor_id=request.state.user["id"])
+    except service.ConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except PermissionError as error:
+        raise HTTPException(status_code=403, detail=str(error)) from error
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"message": "User deleted"}
+
+
+@router.post("/users/{user_id}/password")
+def reset_password(user_id: int, payload: ResetPasswordRequest, request: Request, response: Response):
+    try:
+        user = service.reset_password(
+            user_id, payload.password, payload.confirm_password, actor_id=request.state.user["id"]
+        )
+    except PermissionError as error:
+        raise HTTPException(status_code=403, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user_id == request.state.user["id"]:
+        clear_session_cookie(response, request.app.state.auth_settings)
     return {"user": user}
 
 

@@ -225,9 +225,12 @@ History นำเข้าจาก Push workflow runs ที่ GitHub ยั�
 | เพิ่ม Repository และ Sync ผลเดี่ยว/ทั้งหมด | — | ✓ | ✓ |
 | ลบ Repository | — | — | ✓ |
 | สร้าง/เปิด/ปิดบัญชี และเปลี่ยน Role | — | — | ✓ |
+| ลบบัญชีผู้อื่น และ Reset password | — | — | ✓ |
 | ดู Audit log การเปลี่ยนบัญชี/สิทธิ์ | — | — | ✓ |
 
 ไม่มีการสมัครบัญชีสาธารณะ ให้ Super User สร้างบัญชีผ่าน **User Management** การเปลี่ยน Role หรือปิดบัญชีจะยกเลิก Session ที่เกี่ยวข้อง ระบบป้องกันการปิดบัญชีหรือลดสิทธิ์ Super User ที่ใช้งานได้คนสุดท้าย
+
+ใน **User access** ปุ่ม **Delete** ลบบัญชีถาวรหลังยืนยัน โดยห้ามลบบัญชีตัวเองหรือ Super User ที่ Active คนสุดท้าย ส่วน **Reset password** ให้กรอกรหัสใหม่และยืนยัน 8–128 ตัวอักษร ทั้งสองการทำงานยกเลิก Session ของบัญชีเป้าหมายและเก็บ Audit ไว้ หาก Reset รหัสตัวเองจะต้อง Login ใหม่ การ Reset ไม่เปิดบัญชีที่ Disabled และไม่แสดงรหัสผ่านเดิม
 
 Password เก็บเป็น Argon2id hash และ Session ID เก็บเป็น Hash ในฐานข้อมูล Cookie เป็น HttpOnly/SameSite และ API ที่เปลี่ยนข้อมูลตรวจ Session, Role และ CSRF
 
@@ -277,6 +280,8 @@ python -m uvicorn api.app:app --host 127.0.0.1 --port 8000
 | `GET /api/scans/{id}/findings` | อ่าน Findings ของผลสแกนที่มีรายงานยืนยันแล้ว |
 | `GET /api/policy` | อ่าน Policy และเกณฑ์คะแนน |
 | `GET /api/users`, `POST /api/users`, `PATCH /api/users/{id}` | Super User จัดการบัญชี |
+| `DELETE /api/users/{id}` | Super User ลบบัญชีผู้อื่นและยกเลิก Session |
+| `POST /api/users/{id}/password` | Super User Reset รหัสผ่านด้วย `password` และ `confirm_password` พร้อมยกเลิก Session |
 | `GET /api/users/audit` | Super User ดู Audit log |
 
 API ที่เปลี่ยนข้อมูลต้องส่ง Cookie และ `X-CSRF-Token` ผู้ไม่ Login ได้ HTTP 401 และผู้ไม่มีสิทธิ์ได้ HTTP 403 หน้า `/docs`, `/redoc` และ `/openapi.json` เปิดเฉพาะ Development

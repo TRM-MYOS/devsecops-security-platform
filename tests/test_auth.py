@@ -101,6 +101,8 @@ def protected_requests(environment):
         ("POST", "/scan", {"repo_url": "https://github.com/TRM-MYOS/legacy-auth-repository"}, {"operator", "superuser"}),
         ("POST", "/api/users", {"username": "new-user", "password": PASSWORD, "role": "viewer"}, {"superuser"}),
         ("PATCH", f"/api/users/{viewer_id}", {"role": "viewer"}, {"superuser"}),
+        ("POST", f"/api/users/{viewer_id}/password", {"password": PASSWORD, "confirm_password": PASSWORD}, {"superuser"}),
+        ("DELETE", f"/api/users/{viewer_id}", None, {"superuser"}),
         ("DELETE", f"/api/repositories/{repository_id}", None, {"superuser"}),
         ("POST", "/api/auth/logout", None, {"viewer", "operator", "superuser"}),
     ]
@@ -565,7 +567,7 @@ def test_split_frontend_assets_load_before_login_without_exposing_pages_or_apis(
         assert viewer.get("/api/users").status_code == 403
 
 
-@pytest.mark.parametrize("operation", ["create", "update"])
+@pytest.mark.parametrize("operation", ["create", "update", "delete", "password"])
 def test_admin_revoked_after_middleware_cannot_commit_account_changes(auth_environment, monkeypatch, operation):
     service = auth_environment["service"]
     service.create_user("replacement-admin", PASSWORD, "superuser")
@@ -574,7 +576,7 @@ def test_admin_revoked_after_middleware_cannot_commit_account_changes(auth_envir
 
     with TestClient(auth_environment["api"].app) as client:
         _, headers = login(client)
-        if operation == "create":
+        if operation in {"create", "password"}:
             original_hash = service.hash_password
 
             def hash_then_revoke(password):
@@ -583,12 +585,22 @@ def test_admin_revoked_after_middleware_cannot_commit_account_changes(auth_envir
                 return hashed
 
             monkeypatch.setattr(service, "hash_password", hash_then_revoke)
-            response = client.post(
-                "/api/users", json={"username": "forbidden-new-admin", "password": PASSWORD, "role": "superuser"},
-                headers=headers,
-            )
+            if operation == "create":
+                response = client.post(
+                    "/api/users", json={"username": "forbidden-new-admin", "password": PASSWORD, "role": "superuser"},
+                    headers=headers,
+                )
+            else:
+                response = client.post(
+                    f"/api/users/{user_id(auth_environment, 'viewer')}/password",
+                    json={"password": "Replacement-secret-8!", "confirm_password": "Replacement-secret-8!"},
+                    headers=headers,
+                )
+                with auth_environment["database"].get_connection() as connection:
+                    stored = connection.execute("SELECT password_hash FROM users WHERE username = 'viewer'").fetchone()[0]
+                assert service.verify_password(PASSWORD, stored)
             assert not any(user["username"] == "forbidden-new-admin" for user in service.list_users())
-        else:
+        elif operation == "update":
             def revoke_before_update(target_id, changes, actor_id=None):
                 if actor_id is not None:
                     original_update(actor_id, {"role": "operator"})
@@ -600,5 +612,185 @@ def test_admin_revoked_after_middleware_cannot_commit_account_changes(auth_envir
                 json={"is_active": False}, headers=headers,
             )
             assert service.get_user(user_id(auth_environment, "viewer"))["is_active"] is True
+        else:
+            original_delete = service.delete_user
+
+            def revoke_before_delete(target_id, *, actor_id):
+                original_update(actor_id, {"role": "operator"})
+                return original_delete(target_id, actor_id=actor_id)
+
+            monkeypatch.setattr(service, "delete_user", revoke_before_delete)
+            response = client.delete(f"/api/users/{user_id(auth_environment, 'viewer')}", headers=headers)
+            assert service.get_user(user_id(auth_environment, "viewer")) is not None
         assert response.status_code == 403, response.text
         assert client.get("/api/auth/me").status_code == 401
+
+
+def test_delete_user_revokes_sessions_preserves_audit_and_scan_data(auth_environment):
+    service = auth_environment["service"]
+    target_id = user_id(auth_environment, "viewer")
+    second_session = service.create_session(target_id)
+    with TestClient(auth_environment["api"].app) as admin, TestClient(auth_environment["api"].app) as target:
+        _, headers = login(admin)
+        login(target, "viewer")
+        reset = admin.post(f"/api/users/{target_id}/password", headers=headers,
+                           json={"password": PASSWORD, "confirm_password": PASSWORD})
+        assert reset.status_code == 200
+        login(target, "viewer")
+        response = admin.delete(f"/api/users/{target_id}", headers=headers)
+        assert response.status_code == 200, response.text
+        assert service.get_user(target_id) is None
+        assert service.get_session(second_session["token"]) is None
+        assert target.get("/api/auth/me").status_code == 401
+        assert admin.get("/api/auth/me").status_code == 200
+        csrf = target.get("/api/auth/csrf").json()["csrf_token"]
+        assert target.post("/api/auth/login", json={"username": "viewer", "password": PASSWORD},
+                           headers={"X-CSRF-Token": csrf}).status_code == 401
+        events = admin.get("/api/users/audit").json()["events"]
+    target_events = [e for e in events if e["target_username"] == "viewer"]
+    assert {e["action"] for e in target_events} >= {"user.created", "user.deleted", "user.password_reset"}
+    assert all(e["target_id"] is None for e in target_events)
+    deleted = next(e for e in target_events if e["action"] == "user.deleted")
+    assert deleted["actor_username"] == "admin"
+    assert deleted["before"]["username"] == "viewer"
+    assert PASSWORD not in json.dumps(events)
+    assert "$argon2" not in json.dumps(events)
+    with auth_environment["database"].get_connection() as connection:
+        assert connection.execute("SELECT COUNT(*) FROM auth_sessions WHERE user_id = ?", (target_id,)).fetchone()[0] == 0
+        assert connection.execute("SELECT COUNT(*) FROM repositories").fetchone()[0] == 1
+        assert connection.execute("SELECT COUNT(*) FROM scans").fetchone()[0] == 1
+
+
+def test_deleted_administrator_name_remains_in_earlier_audit_events(auth_environment):
+    service = auth_environment["service"]
+    second = service.create_user("second-admin", PASSWORD, "superuser")
+    service.create_user("child-user", PASSWORD, "viewer", actor_id=second["id"])
+    service.delete_user(second["id"], actor_id=user_id(auth_environment, "superuser"))
+    event = next(e for e in service.list_audit_events() if e["target_username"] == "child-user")
+    assert event["actor_id"] is None
+    assert event["actor_username"] == "second-admin"
+
+
+def test_cannot_delete_self_or_last_active_superuser(auth_environment):
+    with TestClient(auth_environment["api"].app) as admin:
+        _, headers = login(admin)
+        path = f"/api/users/{user_id(auth_environment, 'superuser')}"
+        response = admin.delete(path, headers=headers)
+        assert response.status_code == 409
+        assert "last active Super User" in response.text
+        auth_environment["service"].create_user("another-admin", PASSWORD, "superuser")
+        response = admin.delete(path, headers=headers)
+        assert response.status_code == 409
+        assert "own account" in response.text
+        assert admin.get("/api/auth/me").status_code == 200
+
+
+def test_concurrent_admin_deletions_keep_one_active_superuser(auth_environment):
+    service = auth_environment["service"]
+    first = user_id(auth_environment, "superuser")
+    second = service.create_user("second-admin", PASSWORD, "superuser")["id"]
+
+    def delete(pair):
+        actor, target = pair
+        try:
+            service.delete_user(target, actor_id=actor)
+            return "deleted"
+        except (PermissionError, service.ConflictError):
+            return "rejected"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(delete, [(first, second), (second, first)]))
+    assert sorted(results) == ["deleted", "rejected"]
+    assert len([u for u in service.list_users() if u["role"] == "superuser" and u["is_active"]]) == 1
+
+
+@pytest.mark.parametrize("length", [8, 128])
+def test_reset_password_revokes_all_target_sessions_and_hashes_new_password(auth_environment, length):
+    service = auth_environment["service"]
+    target_id = user_id(auth_environment, "viewer")
+    extra_session = service.create_session(target_id)
+    password = "R" * length
+    with TestClient(auth_environment["api"].app) as admin, TestClient(auth_environment["api"].app) as target:
+        _, headers = login(admin)
+        login(target, "viewer")
+        response = admin.post(f"/api/users/{target_id}/password", headers=headers,
+                              json={"password": password, "confirm_password": password})
+        assert response.status_code == 200, response.text
+        assert set(response.json()["user"]) == PUBLIC_USER_FIELDS
+        assert service.get_session(extra_session["token"]) is None
+        assert target.get("/api/auth/me").status_code == 401
+        assert admin.get("/api/auth/me").status_code == 200
+        csrf = target.get("/api/auth/csrf").json()["csrf_token"]
+        assert target.post("/api/auth/login", json={"username": "viewer", "password": PASSWORD},
+                           headers={"X-CSRF-Token": csrf}).status_code == 401
+        login(target, "viewer", password)
+        audit = admin.get("/api/users/audit").text
+        assert password not in audit and PASSWORD not in audit and "$argon2" not in audit
+        assert password not in response.text and "$argon2" not in response.text
+    with auth_environment["database"].get_connection() as connection:
+        stored = connection.execute("SELECT password_hash FROM users WHERE id = ?", (target_id,)).fetchone()[0]
+    assert stored.startswith("$argon2id$")
+    assert service.verify_password(password, stored)
+    assert not service.verify_password(PASSWORD, stored)
+
+
+def test_reset_own_password_clears_cookie_and_requires_new_login(auth_environment):
+    service = auth_environment["service"]
+    extra = service.create_session(user_id(auth_environment, "superuser"))
+    with TestClient(auth_environment["api"].app) as admin:
+        _, headers = login(admin)
+        response = admin.post(f"/api/users/{user_id(auth_environment, 'superuser')}/password", headers=headers,
+                              json={"password": "Replacement-secret-8!", "confirm_password": "Replacement-secret-8!"})
+        assert response.status_code == 200
+        assert "max-age=0" in response.headers["set-cookie"].lower()
+        assert admin.get("/api/auth/me").status_code == 401
+        assert service.get_session(extra["token"]) is None
+        login(admin, password="Replacement-secret-8!")
+
+
+def test_reset_password_does_not_enable_disabled_account(auth_environment):
+    service = auth_environment["service"]
+    target_id = user_id(auth_environment, "viewer")
+    service.update_user(target_id, {"is_active": False})
+    with TestClient(auth_environment["api"].app) as admin, TestClient(auth_environment["api"].app) as target:
+        _, headers = login(admin)
+        response = admin.post(f"/api/users/{target_id}/password", headers=headers,
+                              json={"password": "Replacement-secret-8!", "confirm_password": "Replacement-secret-8!"})
+        assert response.status_code == 200
+        assert response.json()["user"]["is_active"] is False
+        csrf = target.get("/api/auth/csrf").json()["csrf_token"]
+        assert target.post("/api/auth/login", headers={"X-CSRF-Token": csrf},
+                           json={"username": "viewer", "password": "Replacement-secret-8!"}).status_code == 401
+
+
+@pytest.mark.parametrize("payload, expected", [
+    ({"password": "Short7!", "confirm_password": "Short7!"}, 422),
+    ({"password": "Secret-7!" * 20, "confirm_password": "Secret-7!" * 20}, 422),
+    ({"password": PASSWORD, "confirm_password": "Another-secret-8!"}, 400),
+    ({"password": PASSWORD}, 422),
+    ({"password": {"sensitive": PASSWORD}, "confirm_password": PASSWORD}, 422),
+])
+def test_invalid_reset_preserves_password_sessions_and_audit_without_echoing_secrets(auth_environment, payload, expected):
+    service = auth_environment["service"]
+    target_id = user_id(auth_environment, "viewer")
+    session = service.create_session(target_id)
+    original_audit = service.list_audit_events()
+    with TestClient(auth_environment["api"].app) as admin:
+        _, headers = login(admin)
+        response = admin.post(f"/api/users/{target_id}/password", json=payload, headers=headers)
+    assert response.status_code == expected, response.text
+    assert PASSWORD not in response.text and "Secret-7!" not in response.text and "$argon2" not in response.text
+    assert service.get_session(session["token"]) is not None
+    assert service.list_audit_events() == original_audit
+    with auth_environment["database"].get_connection() as connection:
+        stored = connection.execute("SELECT password_hash FROM users WHERE id = ?", (target_id,)).fetchone()[0]
+    assert service.verify_password(PASSWORD, stored)
+
+
+def test_delete_and_reset_missing_user_return_404(auth_environment):
+    with TestClient(auth_environment["api"].app) as admin:
+        _, headers = login(admin)
+        assert admin.delete("/api/users/999999", headers=headers).status_code == 404
+        response = admin.post("/api/users/999999/password", headers=headers,
+                              json={"password": PASSWORD, "confirm_password": PASSWORD})
+        assert response.status_code == 404
