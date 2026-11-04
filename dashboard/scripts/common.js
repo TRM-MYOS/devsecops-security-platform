@@ -62,6 +62,7 @@ const SAFE_PAGES = new Set([
   "/dashboard/history.html",
   "/dashboard/policy.html",
   "/dashboard/users.html",
+  "/dashboard/settings.html",
 ]);
 const el = (id) => document.getElementById(id);
 const canScan = () => ["superuser", "operator"].includes(state.user?.role);
@@ -92,6 +93,7 @@ function escapeHtml(value) {
 
 function errorDetail(data, fallback) {
   const detail = data?.detail ?? data?.message ?? data?.error ?? data;
+  if (detail && typeof detail.message === "string") return detail.message;
   if (typeof detail === "string" && detail.trim()) return detail.slice(0, 2000);
   if (Array.isArray(detail))
     return detail
@@ -166,10 +168,17 @@ async function fetchJson(url, options = {}) {
       state.user
     )
       await refreshIdentity().catch(() => {});
-    throw new ApiError(
+    const error = new ApiError(
       `${errorDetail(data, response.statusText || "Request failed")} (HTTP ${response.status})`,
       response.status,
     );
+    error.fields = data?.detail?.fields;
+    if (Array.isArray(data?.detail)) {
+      error.fields = Object.fromEntries(
+        data.detail.map((issue) => [issue.loc?.[1], issue.msg]),
+      );
+    }
+    throw error;
   }
   return data;
 }
@@ -364,6 +373,8 @@ function redirectToLogin() {
 
 function navigationIcon(name) {
   const paths = {
+    settings:
+      '<circle cx="12" cy="12" r="3"/><path d="M9 3h6l1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1Z"/>',
     dashboard:
       '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
     scan: '<path d="m12 3 8 4v6c0 4-5 7-8 8-3-1-8-4-8-8V7l8-4Z"/><path d="m8 12 3 3 5-6"/>',
@@ -382,6 +393,7 @@ function renderShell() {
     ["history", "history.html", "Scan History"],
     ["policy", "policy.html", "Security Policy"],
     ["users", "users.html", "User Management"],
+    ["settings", "settings.html", "Owner Settings"],
   ];
   el("navigation-shell").innerHTML = [
     '<aside class="sidebar" id="sidebar">',
@@ -409,7 +421,9 @@ function renderShell() {
             '" ',
             templateText(PAGE === page ? 'aria-current="page"' : ""),
             " ",
-            templateText(page === "users" ? 'data-role="admin"' : ""),
+            templateText(
+              ["users", "settings"].includes(page) ? 'data-role="admin"' : "",
+            ),
             ">",
             templateText(navigationIcon(page)),
             "<span>",
@@ -483,7 +497,8 @@ function applyIdentity() {
     node.hidden = !isSuperUser();
   });
   if (el("viewer-notice")) el("viewer-notice").hidden = canScan();
-  if (PAGE === "users" && !isSuperUser()) location.replace("/dashboard/");
+  if (["users", "settings"].includes(PAGE) && !isSuperUser())
+    location.replace("/dashboard/");
 }
 
 async function refreshIdentity() {
@@ -533,7 +548,7 @@ async function updateHealth() {
 async function startProtectedPage() {
   try {
     await refreshIdentity();
-    if (PAGE === "users" && !isSuperUser()) return;
+    if (["users", "settings"].includes(PAGE) && !isSuperUser()) return;
     renderShell();
     el("auth-check").hidden = true;
     el("protected-app").hidden = false;
@@ -554,6 +569,7 @@ async function startProtectedPage() {
     }
     if (PAGE === "history") await loadHistory();
     if (PAGE === "policy") await loadPolicy();
+    if (PAGE === "settings") await initializeOwnerSettings();
     if (PAGE === "users") {
       el("create-user-form").addEventListener("submit", createUser);
       initializeUserManagement();
@@ -932,8 +948,11 @@ async function runScan(repositoryId = "all") {
 
 async function initializeGitHubMonitor(autoSync = true) {
   try {
-    state.githubConfigured =
-      (await fetchJson("/api/github/status")).configured === true;
+    const githubStatus = await fetchJson("/api/github/status");
+    state.githubConfigured = githubStatus.configured === true;
+    if (el("repo-url") && githubStatus.owner)
+      el("repo-url").placeholder =
+        `https://github.com/${githubStatus.owner}/repository`;
     if (!state.githubConfigured) {
       setMessage(
         "global-message",

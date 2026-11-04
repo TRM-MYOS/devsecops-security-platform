@@ -15,6 +15,7 @@ from repository.github_client import configured as github_configured
 from scanner.repository_scanner import validate_repository
 
 from api.auth_routes import router as auth_router
+from api.owner_settings_routes import router as owner_settings_router
 from auth.settings import Settings
 from auth.web import AuthenticationMiddleware
 
@@ -80,6 +81,7 @@ app = FastAPI(
 
 app.state.auth_settings = auth_settings
 app.include_router(auth_router)
+app.include_router(owner_settings_router)
 app.add_middleware(AuthenticationMiddleware)
 
 
@@ -882,7 +884,9 @@ class GitHubSyncRequest(BaseModel):
 
 @app.get("/api/github/status")
 def github_status():
-    return {"configured": github_configured(), "authentication": "github_app"}
+    from repository.owner_settings import current, FIELDS
+    return {"configured": github_configured(), "authentication": "github_app",
+            "owner": current()[FIELDS["owner"]]}
 
 
 @app.post("/api/repositories/{repository_id}/sync")

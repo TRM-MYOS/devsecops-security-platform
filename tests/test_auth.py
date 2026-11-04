@@ -542,7 +542,7 @@ def test_split_frontend_assets_load_before_login_without_exposing_pages_or_apis(
         for file in (dashboard / folder).iterdir()
         if file.suffix in {".js", ".css"}
     )
-    assert len(assets) == 16
+    assert len(assets) == 18
     with TestClient(auth_environment["api"].app) as anonymous:
         for asset in assets:
             response = anonymous.get(asset, follow_redirects=False)

@@ -102,6 +102,11 @@ def initialize_database():
                 repository_id INTEGER PRIMARY KEY REFERENCES repositories(id) ON DELETE CASCADE,
                 data TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS owner_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                data TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS github_imports (
                 repository_id INTEGER NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
                 run_id INTEGER NOT NULL,

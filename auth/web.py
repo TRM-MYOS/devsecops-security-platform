@@ -20,6 +20,7 @@ DASHBOARD_ASSETS = frozenset({
     "/dashboard/scripts/dashboard.js", "/dashboard/scripts/monitoring.js",
     "/dashboard/scripts/history.js", "/dashboard/scripts/policy.js",
     "/dashboard/scripts/users.js",
+    "/dashboard/scripts/settings.js", "/dashboard/css/settings.css",
     "/dashboard/css/base.css", "/dashboard/css/layout.css",
     "/dashboard/css/components.css", "/dashboard/css/login.css",
     "/dashboard/css/dashboard.css", "/dashboard/css/monitoring.css",
@@ -70,7 +71,8 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 
             if not public_auth:
                 roles = READ_ROLES
-                if path.startswith("/api/users") or dashboard_target == "/dashboard/users.html":
+                if (path.startswith(("/api/users", "/api/owner-settings"))
+                        or dashboard_target in {"/dashboard/users.html", "/dashboard/settings.html"}):
                     roles = frozenset({"superuser"})
                 elif method == "DELETE":
                     roles = frozenset({"superuser"})
@@ -94,6 +96,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             "/dashboard", "/dashboard/", "/dashboard/index.html",
             "/dashboard/login.html", "/dashboard/scan.html", "/dashboard/history.html",
             "/dashboard/policy.html", "/dashboard/users.html",
+            "/dashboard/settings.html",
         } | DASHBOARD_ASSETS
         if dashboard_page and path not in dashboard_paths:
             return _error("Page not found", 404)

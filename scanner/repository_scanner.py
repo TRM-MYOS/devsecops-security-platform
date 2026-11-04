@@ -24,7 +24,9 @@ def get_repository_owner(repo_url: str) -> str:
 
 
 def validate_repository(repo_url: str):
-    """Allow only repositories owned by TRM-MYOS."""
+    """Allow repositories belonging to the configured target owner."""
+    from repository.owner_settings import current, FIELDS
+    allowed_owner = current().get(FIELDS["owner"], ALLOWED_OWNER)
 
     if not GITHUB_URL_PATTERN.match(repo_url):
         raise ValueError(
@@ -33,10 +35,10 @@ def validate_repository(repo_url: str):
 
     owner = get_repository_owner(repo_url)
 
-    if owner.lower() != ALLOWED_OWNER.lower():
+    if owner.lower() != allowed_owner.lower():
         raise ValueError(
             f"Repository owner is not allowed. "
-            f"Only repositories owned by {ALLOWED_OWNER} can be scanned."
+            f"Only repositories owned by {allowed_owner} can be scanned."
         )
 
 

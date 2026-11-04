@@ -8,6 +8,7 @@ const dashboardDirectory = path.join(__dirname, '../dashboard');
 const pageFiles = {
   dashboard: 'index.html', scan: 'scan.html', history: 'history.html',
   policy: 'policy.html', users: 'users.html', login: 'login.html',
+  settings: 'settings.html',
 };
 
 function pageScripts(page) {
@@ -58,6 +59,7 @@ test('each page loads shared assets and its own script without duplicate startup
   const scripts = {
     dashboard: 'dashboard', scan: 'monitoring', history: 'history',
     policy: 'policy', users: 'users', login: 'login',
+    settings: 'settings',
   };
   for (const [page, script] of Object.entries(scripts)) {
     assert.deepEqual(pageScripts(page).map(item => item.name), [
@@ -88,6 +90,61 @@ test('shared template formatting preserves interpolation semantics and does not 
   assert.equal(h.run('templateText("<unsafe>")'), '<unsafe>');
   assert.equal(h.run('templateText(escapeHtml("<unsafe>"))'), '&lt;unsafe&gt;');
   assert.throws(() => h.run('templateText(Symbol("test"))'), /Symbol/);
+});
+
+function settingsHarness() {
+  const h = harness('', 'settings');
+  h.run('state.user={role:"superuser"};');
+  const fields = ['owner','app_id','installation_id','private_key_path','workflow'];
+  for (const field of fields) {
+    h.node(`setting-${field}`).value = field === 'owner' ? 'new-owner' : 'test-value';
+    h.node(`setting-${field}`).setAttribute = () => {};
+  }
+  h.node('owner-settings-form').reportValidity = () => true;
+  h.node('owner-settings-form').setAttribute = () => {};
+  h.run('setMessage=(id,text,type)=>{el(id).textContent=text;el(id).messageType=type;};');
+  h.node('settings-message').classList = {toggle: () => {}};
+  return h;
+}
+
+test('Owner Settings test sends entered values without saving and blocks duplicate submissions', async () => {
+  const h = settingsHarness();
+  h.run('globalThis.calls=[]; fetchJson=(url,options)=>new Promise(resolve=>{calls.push({url,options});globalThis.finish=resolve;});');
+  const pending = h.run('submitOwnerSettings(false)');
+  await h.run('submitOwnerSettings(true)');
+  assert.equal(h.run('calls.length'), 1);
+  assert.equal(h.run('calls[0].url'), '/api/owner-settings/test');
+  assert.equal(h.run('JSON.parse(calls[0].options.body).owner'), 'new-owner');
+  assert.equal(h.node('owner-settings-fields').disabled, true);
+  h.run('finish({message:"Connection verified.",repositories_accessible:2})');
+  await pending;
+  assert.ok(h.node('settings-message').textContent.includes('have not been saved'));
+  assert.equal(h.node('owner-settings-fields').disabled, false);
+});
+
+test('Owner Settings errors remain text, highlight fields and preserve entered values', async () => {
+  const h = settingsHarness();
+  let focused = false;
+  h.node('setting-owner').focus = () => {focused = true;};
+  h.run('fetchJson=async()=>{const error=new ApiError("Invalid settings",422);error.fields={owner:"<invalid owner>"};throw error;};');
+  await h.run('submitOwnerSettings(true)');
+  assert.equal(h.node('error-owner').textContent, '<invalid owner>');
+  assert.equal(h.node('setting-owner').value, 'new-owner');
+  assert.equal(h.node('owner-settings-fields').disabled, false);
+  assert.equal(focused, true);
+});
+
+test('Owner Settings saves verified values and refreshes connection status without starting a scan', async () => {
+  const h = settingsHarness();
+  h.run(`globalThis.calls=[]; fetchJson=async(url,options)=>{calls.push({url,options});return {source:"database",updated_at:null,settings:{owner:"new-owner",app_id:"123",installation_id:"456",private_key_path:"/safe/test.pem",workflow:"security-gate.yml"}}}; initializeGitHubMonitor=async(autoSync)=>{calls.push({autoSync})};`);
+  await h.run('submitOwnerSettings(true)');
+  assert.equal(h.run('calls[0].url'), '/api/owner-settings');
+  assert.equal(h.run('calls[1].autoSync'), false);
+  assert.equal(h.node('setting-app_id').value, '123');
+  assert.ok(h.node('settings-message').textContent.includes('no Backend restart'));
+  h.run('state.user={role:"viewer"};');
+  await h.run('submitOwnerSettings(true)');
+  assert.equal(h.run('calls.length'), 2);
 });
 
 test('repository-scoped history can render shared branch disclosures without the Dashboard script', () => {

@@ -123,6 +123,12 @@ async function loadUserList() {
 }
 
 function auditChanges(event) {
+  if (event.action === "owner_settings.updated") {
+    const fields = Object.keys(event.after || {}).filter(
+      (key) => event.before?.[key] !== event.after[key],
+    );
+    return `Owner Settings updated: ${fields.join(", ") || "connection verified"}`;
+  }
   if (event.action === "user.deleted") return "Account deleted";
   if (event.action === "user.password_reset")
     return "Password reset; sessions revoked";

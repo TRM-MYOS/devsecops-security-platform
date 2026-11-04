@@ -118,7 +118,7 @@ jobs:
 
 Workflow นี้เรียก Central เมื่อ **Push ทุก Branch** หรือ **เปิด/อัปเดต Pull Request เข้า `main`** โดย Central ดูแลการติดตั้งเครื่องมือ สแกน และตัดสิน ALLOW/BLOCK ทั้งหมด
 
-ชื่อไฟล์ต้องตรงกับ `DEVSECOPS_GITHUB_WORKFLOW` ใน `.env` ของ Dashboard ซึ่งปัจจุบันใช้ค่าร่วมกันทุก Repository หากระบบเดิมใช้ `security-gate-test.yml` ให้คงค่าเดิมไว้จนกว่าจะเปลี่ยนชื่อ Workflow ในทุก Repository ที่ติดตามเป็น `security-gate.yml` พร้อมแล้วจึงเปลี่ยนค่าใน `.env` และ Restart Backend การแก้ตัวอย่างใน README ไม่ได้เปลี่ยนชื่อ Workflow หรือค่าที่ใช้งานจริงให้เอง
+ชื่อไฟล์ต้องตรงกับ **Workflow filename** ในหน้า **Owner Settings** ซึ่งใช้ร่วมกันทุก Repository หากยังไม่บันทึกผ่าน Dashboard ระบบอ่าน `DEVSECOPS_GITHUB_WORKFLOW` จาก Environment / `.env` และใช้ `security-gate-test.yml` เป็น Default เมื่อไม่ได้กำหนด หากจะเปลี่ยนชื่อเป็น `security-gate.yml` ให้เปลี่ยน Workflow ใน Repository ที่ติดตามให้ตรงกันก่อน การแก้ตัวอย่างใน README ไม่ได้เปลี่ยนไฟล์ที่ใช้งานจริงให้เอง
 
 สิ่งที่ต้องตั้งค่าให้ครบ:
 
@@ -137,7 +137,7 @@ Backend ใช้ GitHub App อ่านข้อมูล Repository, Workflow
 1. สร้าง GitHub App และให้ Repository Permissions: **Metadata: Read**, **Contents: Read** และ **Actions: Read**
 2. ติดตั้ง App ในบัญชีเจ้าของ Repository แล้วเลือก Repositories ที่ต้องการให้ Dashboard อ่าน
 3. สร้าง Private Key เก็บไฟล์ `.pem` ไว้นอกโปรเจกต์
-4. ใส่ค่าของ App ใน `.env` โดยใช้ข้อมูลของคุณแทน Placeholder:
+4. เปิด Dashboard ด้วย Super User แล้วกรอก Owner และค่าของ App ใน **Owner Settings** จากนั้น Test connection และ Save settings ตามข้อ 5 หรือเตรียมค่าเริ่มต้นใน `.env` ก่อนเปิด Backend โดยใช้ข้อมูลของคุณแทน Placeholder:
 
 ```dotenv
 DEVSECOPS_GITHUB_APP_ID=YOUR_APP_ID
@@ -146,11 +146,11 @@ DEVSECOPS_GITHUB_PRIVATE_KEY_PATH="C:\secure\github-app.private-key.pem"
 DEVSECOPS_GITHUB_WORKFLOW=security-gate.yml
 ```
 
-5. Restart Backend เพื่อใช้ค่าที่ตั้งไว้ แล้วเพิ่ม Repository ผ่าน Dashboard
+5. หากตั้งผ่าน Dashboard ใช้ได้ในรอบ Sync ถัดไปโดยไม่ Restart หากตั้งผ่าน `.env` ก่อนบันทึกค่าในฐานข้อมูล ให้ Restart Backend แล้วเพิ่ม Repository ผ่าน Dashboard
 
 ระบบนี้ใช้การดึงข้อมูลเป็นรอบ จึงไม่ต้องตั้ง Webhook หรือ OAuth สำหรับผู้ใช้ ดูขั้นตอนและข้อจำกัดเพิ่มเติมใน [คู่มือ GitHub monitoring](docs/github-monitoring.md)
 
-อย่าใส่ Password, Token หรือเนื้อหา Private Key ลง README, Workflow หรือ Git ให้เก็บเพียง Path ของไฟล์ Key ใน `.env` และจำกัดสิทธิ์เข้าถึงไฟล์จริง
+อย่าใส่ Password, Token หรือเนื้อหา Private Key ลง README, Workflow หรือ Git ระบบเก็บเพียง Path ของไฟล์ Key ในการตั้งค่า และต้องจำกัดสิทธิ์เข้าถึงไฟล์จริง
 
 ## 5. ใช้งาน Dashboard
 
@@ -170,7 +170,23 @@ DEVSECOPS_GITHUB_WORKFLOW=security-gate.yml
 4. Push โค้ดที่เข้าเงื่อนไข Workflow แล้วรอ GitHub Actions สแกนเสร็จ
 5. ดูผลบน Dashboard หรือกด Branch เพื่อเปิด History และรายละเอียด เช่น **Affected file**, **Line** และลิงก์ไฟล์ของ Commit นั้น
 
-Dashboard ปัจจุบันรับ URL ภายใต้ Owner **TRM-MYOS** ตามการตรวจสอบในโค้ด ผู้ใช้ที่ Login ทุก Role อ่าน Repository ใน Workspace ร่วมกันได้
+Dashboard รับ URL ภายใต้ **GitHub Owner** ที่ตั้งในหน้า **Owner Settings** โดยค่าเริ่มต้นเป็น **TRM-MYOS** ผู้ใช้ที่ Login ทุก Role อ่าน Repository ใน Workspace ร่วมกันได้
+
+### ตั้งค่าบัญชีและ GitHub App จาก Dashboard
+
+Login ด้วย **Super User** แล้วเปิดเมนู **Owner Settings**:
+
+1. กรอก **GitHub Owner**, **GitHub App ID**, **Installation ID**, **Private Key Path** และ **Workflow filename** ให้เป็นชุดเดียวกัน
+2. **Private Key Path** ต้องเป็น Absolute Path ของไฟล์ `.pem` บนเครื่อง Backend เก็บไว้นอกโปรเจกต์ ไม่ใช่ Path บนเครื่องที่เปิด Browser ระบบตรวจว่าเป็น RSA Private Key ที่อ่านได้และไม่แสดงเนื้อหา Key
+3. กด **Test connection** เพื่อตรวจ App, Owner ของ Installation, สิทธิ์อ่าน Actions/Contents/Metadata และการอ่านรายการ Repository โดยยังไม่บันทึก การทดสอบนี้ยังไม่ยืนยันว่าแต่ละ Repository มี Workflow หรือ Artifact ที่ถูกต้อง ส่วนนี้ตรวจเมื่อ Sync
+4. กด **Save settings** ระบบตรวจการเชื่อมต่อซ้ำก่อนบันทึก SQLite หากข้อมูลผิดหรือ GitHub ติดต่อไม่ได้ ค่าปัจจุบันจะยังอยู่ พร้อมแสดงข้อผิดพลาด
+5. รอบ Sync ที่กำลังทำงานจะใช้ค่าชุดเดิมจนจบก่อนบันทึกค่าใหม่ รอบถัดไปใช้ค่าใหม่พร้อม Client/Token ชุดใหม่ **ไม่ต้อง Restart Backend หลัง Save** เปิด Backend ด้วยหนึ่ง Worker ตามคู่มือนี้
+
+ค่าที่บันทึกในฐานข้อมูลมีลำดับความสำคัญเหนือ **Process Environment → `.env` → Default** ทั้งห้าค่าเป็นชุดเดียวกัน จึงเปลี่ยน `.env` อย่างเดียวแล้วไม่ทับค่าที่บันทึกผ่าน Dashboard หากย้ายเครื่องพร้อมฐานข้อมูล ให้แก้ Private Key Path ใน Owner Settings ให้ตรงกับเครื่องใหม่
+
+เมื่อเปลี่ยน Owner ระบบเก็บ Repository, ประวัติและ Findings เดิมไว้ แต่ Repository นอก Owner ใหม่จะขึ้นข้อความหยุดติดตามและไม่มีผล ALLOW/BLOCK ปัจจุบัน ผลใน Scan History ยังคงเป็นหลักฐานของ Commit เดิม เพิ่ม URL ของ Owner ใหม่ใน Repository Monitoring ได้ตามปกติ การเปลี่ยนค่าบันทึก Audit ในหน้า User Management
+
+**ส่วนที่ยังต้องจัดการด้วยมือ:** การติดตั้ง App และสิทธิ์ Repository บน GitHub, Workflow ของ Repository เป้าหมาย และ Branch Protection ส่วนชื่อ Owner ใน `uses:` ของ `.github/workflows/security-scan.yml` กับ Workflow เป้าหมายยังระบุ Central ที่เรียกใช้งาน หากย้าย Central เองต้องตรวจ `TRUSTED_WORKFLOW` ใน `repository/github_monitor.py` ด้วย การเปลี่ยน Owner เป้าหมายใน Dashboard ไม่เปลี่ยน Central ที่เชื่อถือหรือกฎ ALLOW/BLOCK
 
 ### Sync และการอัปเดตอัตโนมัติ
 
@@ -249,6 +265,7 @@ Password เก็บเป็น Argon2id hash และ Session ID เก็�
 | `DEVSECOPS_LOGIN_WINDOW_SECONDS` | `900` | ช่วงจำกัด Login 15 นาที |
 | `DEVSECOPS_SCANNER_TIMEOUT_SECONDS` | `600` | Timeout ต่อ Scanner ใน Process ที่สแกนจริง |
 | `DEVSECOPS_GITHUB_WORKFLOW` | `security-gate-test.yml` | ค่าเริ่มต้นในโค้ดเดิม; ตั้งเป็น `security-gate.yml` เมื่อใช้ชื่อตามตัวอย่างนี้ครบทุก Repository |
+| `DEVSECOPS_GITHUB_OWNER` | `TRM-MYOS` | Owner เป้าหมายเมื่อยังไม่มีค่าที่บันทึกใน Owner Settings |
 | `DEVSECOPS_GITHUB_POLL_ENABLED` | `true` | เปิดการ Sync อัตโนมัติใน Backend |
 
 ใช้ Uvicorn **หนึ่ง Worker** เพื่อไม่ให้เกิด Poller ซ้ำ การตั้ง Timeout ใน Dashboard ไม่ได้เปลี่ยนค่าใน GitHub Runner
@@ -274,6 +291,9 @@ python -m uvicorn api.app:app --host 127.0.0.1 --port 8000
 | `POST /api/auth/logout` | Logout และยกเลิก Session |
 | `GET /api/repositories` / `POST /api/repositories` | ดูรายการ / เพิ่ม Repository |
 | `GET /api/github/status` | ตรวจว่ามีการตั้งค่า App โดยไม่ส่ง Credentials กลับ |
+| `GET /api/owner-settings` | Super User อ่านค่าการเชื่อมต่อปัจจุบันและแหล่งที่มา |
+| `POST /api/owner-settings/test` | Super User ทดสอบค่าที่กรอก โดยไม่บันทึก ต้องมี CSRF |
+| `POST /api/owner-settings` | Super User ตรวจการเชื่อมต่อซ้ำและบันทึก SQLite พร้อม Audit ต้องมี CSRF |
 | `POST /api/repositories/{id}/sync` | Sync Branch ของ Repository ที่เลือก |
 | `POST /api/github/sync` | Sync ทุก Repository |
 | `GET /api/scans` | อ่านประวัติที่บันทึกไว้ |
@@ -327,7 +347,7 @@ Tests ใช้ฐานข้อมูลชั่วคราวและ Mock
 
 | อาการ | ตรวจอะไร |
 |---|---|
-| `GitHub App is not configured` | ค่า App ID, Installation ID และ Path ของ Key; Restart Backend หลังแก้ |
+| `GitHub App is not configured` | Super User ตรวจ App ID, Installation ID และ Path ของ Key ใน Owner Settings แล้ว Test/Save; ไม่ต้อง Restart หลัง Save |
 | GitHub ตอบ 404 / ไม่มีสิทธิ์ | App ติดตั้งกับ Repository นั้นและมี Contents/Actions Read หรือไม่ รวมถึง Workflow ที่ตั้งไว้มีอยู่จริงหรือไม่ |
 | Branch เป็น PENDING / Not evaluated | Commit ล่าสุดมี Workflow run ที่ตรงกันหรือไม่ และสแกนเสร็จหรือยัง |
 | Report หาย/ผิดรูปแบบ | ดู Log และ Artifact `security-reports` บน GitHub Actions; ระบบจะไม่เปลี่ยนเป็น ALLOW ทดแทน |

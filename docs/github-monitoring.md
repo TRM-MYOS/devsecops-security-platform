@@ -11,7 +11,16 @@ API endpoints remain available for compatibility. Scanner, score and policy rule
 2. In the App settings open **Credentials > Key pairs > New key**.
    Keep the downloaded PEM **outside this repository**.
    Copy its App ID and installation ID. Do not paste the key into chat or a workflow.
-3. Install `requirements.txt` and export these variables before starting the backend:
+3. Install `requirements.txt`, start the backend and sign in as a Super User.
+   Open **Owner Settings** and enter the target Owner, App ID, Installation ID,
+   absolute PEM path on the Backend host, and workflow filename. **Test connection**
+   verifies the entered values without saving. **Save settings** verifies again,
+   saves to SQLite and applies to the next synchronization without a restart.
+   The connection test checks App/installation identity, installation Owner,
+   Actions/Contents/Metadata read permissions, and repository list access. Workflow
+   and report availability are still verified separately when each repository syncs.
+
+   Before any database settings have been saved, these variables remain supported:
 
    ```powershell
    $env:DEVSECOPS_GITHUB_APP_ID = 'YOUR_APP_ID'
@@ -21,7 +30,17 @@ API endpoints remain available for compatibility. Scanner, score and policy rule
    .\.venv\Scripts\python.exe -m uvicorn api.app:app --host 127.0.0.1 --port 8000
    ```
 
-4. Login and add a `https://github.com/TRM-MYOS/REPOSITORY` URL once.
+   Saved settings override nonempty process Environment variables, then `.env`,
+   then defaults (`TRM-MYOS` for Owner and `security-gate-test.yml` for workflow).
+   `DEVSECOPS_GITHUB_OWNER` can set the initial target Owner. Database settings
+   store IDs and the key path, never PEM contents or tokens. Changes are audited.
+   A sync round pins a complete configuration; a save waits for active syncs to
+   finish, and new clients start with an empty token cache. Existing repositories
+   outside a new Owner stop monitoring; their historical scans/findings remain.
+   Changing the target Owner never changes the trusted Central workflow below.
+   When moving the database to another host, update the PEM path in Owner Settings.
+
+4. Add a `https://github.com/YOUR-OWNER/REPOSITORY` URL once.
    All branches are discovered automatically, including branches created later.
    No branch input is needed. The existing workflow still determines which pushes
    are scanned: the updated Test workflow scans pushes on every branch (`**`) after

@@ -12,6 +12,7 @@ from urllib.parse import quote
 
 from repository.database import get_connection
 from repository.github_client import GitHubClient, GitHubError, configuration
+from repository.owner_settings import settings_scope, fingerprint
 from scanner.repository_scanner import validate_repository
 from security.parser import parse_reports, build_summary
 
@@ -20,12 +21,16 @@ SYNC_LOCK = threading.RLock()
 REPOSITORY_SYNC_LOCK = threading.Lock()
 
 
+@settings_scope
 def sync_all_branches(manager, repository_id, client=None):
     """Discover branches on every poll, including branches created after enrollment."""
     repository = manager.get_repository(repository_id)
     if repository is None:
         raise ValueError("Repository not found")
-    validate_repository(repository["url"])
+    try:
+        validate_repository(repository["url"])
+    except ValueError:
+        return _store(repository_id, _outside_owner())
     full_name = repository["url"].rstrip("/").split("github.com/", 1)[1]
     if full_name.endswith(".git"):
         full_name = full_name[:-4]
@@ -92,8 +97,23 @@ def poll_repositories(manager, stop, interval=30):
 
 def tracking(repository_id):
     with closing(get_connection()) as connection:
+        repository = connection.execute("SELECT url FROM repositories WHERE id=?", (repository_id,)).fetchone()
         row = connection.execute("SELECT data FROM github_tracking WHERE repository_id = ?", (repository_id,)).fetchone()
-    return json.loads(row["data"]) if row else {"execution_status": "not_synced", "policy_status": None}
+    if repository:
+        try:
+            validate_repository(repository["url"])
+        except ValueError:
+            return _outside_owner()
+    data = json.loads(row["data"]) if row else {"execution_status": "not_synced", "policy_status": None}
+    if data.get("settings_fingerprint") and data["settings_fingerprint"] != fingerprint():
+        return {"execution_status": "not_synced", "policy_status": None, "branches": [],
+                "message": "Connection settings changed. Waiting for synchronization."}
+    return data
+
+
+def _outside_owner():
+    return {"execution_status": "not_monitored", "policy_status": None, "branches": [],
+            "message": "Repository is outside the configured GitHub Owner. Previous results remain in Scan History."}
 
 
 def scan_metadata(scan_id):
@@ -103,6 +123,7 @@ def scan_metadata(scan_id):
 
 
 def _store(repository_id, data, publish=True):
+    data["settings_fingerprint"] = fingerprint()
     data["synced_at"] = datetime.now(timezone.utc).isoformat()
     with closing(get_connection()) as connection, connection:
         if publish:
@@ -314,6 +335,7 @@ def _inspect_run(manager, repository, run, client, metadata=None, before=None):
     return _record_run(repository_id, data)
 
 
+@settings_scope
 def sync_push_history(manager, repository_id, client):
     """Page through all retained workflow runs, including deleted branches and older heads.
 
@@ -344,11 +366,15 @@ def sync_push_history(manager, repository_id, client):
     return {"status": "completed", "attempts": len(results), "failed": sum(r["execution_status"] == "error" for r in results)}
 
 
+@settings_scope
 def sync_repository(manager, repository_id, branch=None, client=None, publish=True):
     repository = manager.get_repository(repository_id)
     if repository is None:
         raise ValueError("Repository not found")
-    full_name = _full_name(repository)
+    try:
+        full_name = _full_name(repository)
+    except ValueError:
+        return _store(repository_id, _outside_owner(), publish=publish)
     own_client = client is None
     client = client or GitHubClient()
     data = {"execution_status": "waiting", "policy_status": None, "source": "github_actions", "full_name": full_name}
