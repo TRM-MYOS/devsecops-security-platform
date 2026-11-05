@@ -139,7 +139,7 @@ def _store(repository_id, data, publish=True):
     return data
 
 
-def read_reports(content):
+def read_reports(content, *, policy_time=None):
     try:
         with zipfile.ZipFile(io.BytesIO(content)) as archive:
             required = {"bandit.json", "trivy.json", "gitleaks.json", "security-summary.json"}
@@ -169,8 +169,31 @@ def read_reports(content):
         expected = build_summary(findings, summary["score"], summary["grade"], summary)
         if any(summary.get(key) != value for key, value in expected.items()):
             raise GitHubError("Central summary does not match scanner reports")
+        from security.policy_source import source_config, verify
+        from security.policy import load_local_policy, evaluate_config
+        source = source_config()
+        applied = summary.get("policy")
+        if applied is not None:
+            if (not isinstance(applied, dict) or type(applied.get("minimum_score")) is not int
+                    or not 0 <= applied["minimum_score"] <= 100 or not isinstance(applied.get("version"), str)):
+                raise GitHubError("Invalid policy snapshot")
+            if applied.get("source") == "signed-https":
+                if not source:
+                    raise GitHubError("Signed policy trust is not configured on this Dashboard")
+                payload = verify(applied.get("attestation"), source, at=policy_time)
+                if any(applied[k] != payload[k] for k in ("minimum_score", "version")):
+                    raise GitHubError("Policy snapshot does not match its signature")
+            elif source and policy_time is not None and policy_time >= source["required_from"]:
+                raise GitHubError("This run requires signed Central policy")
+            config = load_local_policy()
+            config["policy"]["minimum_score"] = applied["minimum_score"]
+            config["applied_policy"] = applied
+            if evaluate_config(findings, summary["score"], config)["status"] != summary["status"]:
+                raise GitHubError("Gate decision does not match the recorded policy")
+        elif source and policy_time is not None and policy_time >= source["required_from"]:
+            raise GitHubError("This run has no required signed policy snapshot")
         return summary
-    except (SystemExit, ValueError, OSError, zipfile.BadZipFile, RuntimeError) as error:
+    except (SystemExit, ValueError, OSError, zipfile.BadZipFile, RuntimeError, TypeError) as error:
         if isinstance(error, GitHubError):
             raise
         raise GitHubError("Security reports failed validation") from error
@@ -178,7 +201,7 @@ def read_reports(content):
 
 TRUSTED_WORKFLOW = "TRM-MYOS/devsecops-security-platform/.github/workflows/security-scan.yml@main"
 TRUSTED_JOB = "Central Security Gate / Run Central Security Scan"
-VALIDATION_VERSION = 2
+VALIDATION_VERSION = 3
 
 
 def _full_name(repository):
@@ -238,18 +261,27 @@ def run_history(repository_id=None):
                WHERE h.scan_id IS NULL AND (? IS NULL OR h.repository_id=?)""",
             (repository_id, repository_id),
         ).fetchall()
-    result = []
-    for row in rows:
-        data = json.loads(row["data"])
-        result.append({
+    return [error_record(row) for row in rows]
+
+
+def run_record(repository_id, run_id, attempt):
+    with closing(get_connection()) as connection:
+        return connection.execute("""SELECT h.*, r.name FROM github_run_history h
+            JOIN repositories r ON r.id=h.repository_id
+            WHERE h.repository_id=? AND h.run_id=? AND h.attempt=?""",
+            (repository_id, run_id, attempt)).fetchone()
+
+
+def error_record(row):
+    data = json.loads(row["data"])
+    return {
             "id": f"run-{row['repository_id']}-{row['run_id']}-{row['attempt']}",
             "repository_id": row["repository_id"], "repository_name": row["name"],
             "scanned_at": data.get("run_updated_at"), "score": None, "grade": None,
             "status": None, "reason": data.get("message") or "No validated policy decision",
             "findings": None, "report_available": False,
             "execution_status": data["execution_status"], "github": data,
-        })
-    return result
+        }
 
 
 def _inspect_run(manager, repository, run, client, metadata=None, before=None):
@@ -278,9 +310,11 @@ def _inspect_run(manager, repository, run, client, metadata=None, before=None):
             existing = connection.execute("SELECT scan_id, metadata FROM github_imports WHERE repository_id=? AND run_id=? AND attempt=?",
                                           (repository_id, run["id"], attempt)).fetchone()
         cached_metadata = json.loads(existing["metadata"]) if existing else {}
+        if cached_metadata.get("policy"):
+            data["policy"] = cached_metadata["policy"]
         provenance = cached_metadata.get("producer")
         data["producer"] = provenance or _producer(client, full_name, run)
-        if existing and cached_metadata.get("validation_version") == VALIDATION_VERSION:
+        if existing and cached_metadata.get("validation_version") in {2, VALIDATION_VERSION}:
             with closing(get_connection()) as connection:
                 saved = connection.execute("SELECT * FROM scans WHERE id=?", (existing["scan_id"],)).fetchone()
             if saved["status"] == "ALLOW" and (run["conclusion"] != "success" or data["producer"]["job_conclusion"] != "success"):
@@ -307,7 +341,10 @@ def _inspect_run(manager, repository, run, client, metadata=None, before=None):
             candidates.append(artifact)
         if len(candidates) != 1:
             raise GitHubError("No unambiguous security report for this run attempt")
-        summary = read_reports(client.artifact(full_name, candidates[0]["id"]))
+        policy_time = datetime.fromisoformat(candidates[0]["created_at"].replace("Z", "+00:00")).timestamp()
+        summary = read_reports(client.artifact(full_name, candidates[0]["id"]), policy_time=policy_time)
+        if summary.get("policy"):
+            data["policy"] = summary["policy"]
         if summary["status"] == "ALLOW" and (run["conclusion"] != "success" or data["producer"]["job_conclusion"] != "success"):
             raise GitHubError("Failed workflow cannot supply an ALLOW decision")
         data["validation_version"] = VALIDATION_VERSION
@@ -324,7 +361,7 @@ def _inspect_run(manager, repository, run, client, metadata=None, before=None):
                                    (json.dumps(data), repository_id, run["id"], attempt))
             else:
                 scan_id = manager.save_scan(repository_id, run["updated_at"], summary["score"], summary["grade"],
-                                            summary["status"], summary["reason"], summary["findings_data"], connection=connection)
+                                            summary["status"], summary["reason"], summary["findings_data"], connection=connection, policy=summary.get("policy"))
                 connection.execute("INSERT INTO github_imports VALUES (?, ?, ?, ?, ?)",
                                    (repository_id, run["id"], attempt, scan_id, json.dumps(data)))
         data.update(execution_status="completed", policy_status=summary["status"], scan_id=scan_id, findings=summary["findings"])

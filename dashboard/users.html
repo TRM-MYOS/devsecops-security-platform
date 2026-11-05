@@ -159,6 +159,32 @@
               Refresh
             </button>
           </div>
+          <div class="user-access-filters" aria-label="Filter user access">
+            <label for="user-access-search"
+              >Search username
+              <input
+                id="user-access-search"
+                type="search"
+                placeholder="Search username"
+                autocomplete="off"
+              />
+            </label>
+            <label for="user-access-role"
+              >Role
+              <select id="user-access-role">
+                <option value="">All roles</option>
+                <option value="superuser">Super User</option>
+                <option value="operator">Operator</option>
+                <option value="viewer">Viewer</option>
+              </select>
+            </label>
+            <span
+              id="user-access-count"
+              class="muted"
+              role="status"
+              aria-live="polite"
+            ></span>
+          </div>
           <div id="users-container">
             <div class="loading">Loading users...</div>
           </div>

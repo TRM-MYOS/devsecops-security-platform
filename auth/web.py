@@ -1,6 +1,7 @@
 """Central access checks for API endpoints and protected dashboard pages."""
 
 import posixpath
+import re
 from urllib.parse import quote
 
 from starlette.concurrency import run_in_threadpool
@@ -21,6 +22,8 @@ DASHBOARD_ASSETS = frozenset({
     "/dashboard/scripts/history.js", "/dashboard/scripts/policy.js",
     "/dashboard/scripts/users.js",
     "/dashboard/scripts/settings.js", "/dashboard/css/settings.css",
+    "/dashboard/scripts/scan-renderer.js", "/dashboard/scripts/scan-detail.js", "/dashboard/css/scan-detail.css",
+    "/dashboard/scripts/members.js", "/dashboard/css/members.css",
     "/dashboard/css/base.css", "/dashboard/css/layout.css",
     "/dashboard/css/components.css", "/dashboard/css/login.css",
     "/dashboard/css/dashboard.css", "/dashboard/css/monitoring.css",
@@ -74,11 +77,31 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 if (path.startswith(("/api/users", "/api/owner-settings"))
                         or dashboard_target in {"/dashboard/users.html", "/dashboard/settings.html"}):
                     roles = frozenset({"superuser"})
+                elif (path == "/api/policy" or path.startswith("/api/policy/")) and method not in {"GET", "HEAD"}:
+                    roles = frozenset({"superuser"})
+                elif dashboard_target == "/dashboard/members.html":
+                    roles = WRITE_ROLES
+                elif re.fullmatch(r"/api/repositories/[0-9]+/leave", path) and method == "POST":
+                    roles = READ_ROLES
+                elif re.fullmatch(r"/api/repositories/[0-9]+/(?:members(?:/[0-9]+)?|member-candidates)", path):
+                    roles = WRITE_ROLES
                 elif method == "DELETE":
                     roles = frozenset({"superuser"})
                 elif method not in {"GET", "HEAD"} and path != "/api/auth/logout":
                     roles = WRITE_ROLES
                 if user["role"] not in roles:
+                    return _error("Insufficient permissions", 403)
+                from repository import membership
+                try:
+                    repository_match = re.match(r"^/api/repositories/([0-9]+)(?:/|$)", path)
+                    scan_match = re.match(r"^/api/scans/([^/]+)(?:/|$)", path)
+                    if repository_match:
+                        membership.check(user["id"], membership.parse_id(repository_match[1]), manage="/members" in path or path.endswith("/member-candidates"))
+                    elif scan_match:
+                        membership.check(user["id"], membership.record_repository_id(scan_match[1]))
+                except membership.NotFound:
+                    return _error("Resource not found", 404)
+                except PermissionError:
                     return _error("Insufficient permissions", 403)
 
             if method not in {"GET", "HEAD"}:
@@ -97,6 +120,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             "/dashboard/login.html", "/dashboard/scan.html", "/dashboard/history.html",
             "/dashboard/policy.html", "/dashboard/users.html",
             "/dashboard/settings.html",
+            "/dashboard/scan-detail.html", "/dashboard/members.html",
         } | DASHBOARD_ASSETS
         if dashboard_page and path not in dashboard_paths:
             return _error("Page not found", 404)

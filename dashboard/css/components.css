@@ -1,4 +1,11 @@
 /* Shared controls, forms, messages, tables, badges, and icons. */
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin: 16px 0;
+}
 /* Original cascade order is retained within this file, including responsive rules. */
 button,
 input,
@@ -891,10 +898,9 @@ td .reason-cell {
 
 .branch-summary {
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) minmax(180px, 1.5fr) minmax(
-      130px,
-      1fr
-    ) auto;
+  grid-template-columns:
+    minmax(160px, 1fr) minmax(180px, 1.5fr) minmax(130px, 1fr)
+    auto;
   align-items: center;
   gap: 20px;
   padding: 18px 20px;

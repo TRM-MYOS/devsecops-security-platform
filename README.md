@@ -158,8 +158,10 @@ DEVSECOPS_GITHUB_WORKFLOW=security-gate.yml
 |---|---|
 | **Dashboard** | ดูผลล่าสุดของแต่ละ Branch พร้อมสถานะและจำนวน Findings |
 | **Repository Monitoring** | เพิ่ม URL เลือก Repository ดู Branch และสั่ง Sync ผล |
-| **Scan History** | ดูประวัติ Workflow runs และรายละเอียดช่องโหว่ของ Commit ที่บันทึกไว้ |
-| **Security Policy** | อ่านเกณฑ์คะแนนและ Policy ปัจจุบัน การแก้ Policy ทำผ่านไฟล์ตั้งค่า |
+| **Scan History** | ตารางประวัติตามสิทธิ์ พร้อม Search, Filter และแบ่งหน้า; View เปิดหน้า Scan details |
+| **Scan details** | รายละเอียด Commit เดียว ตัวกรอง Scanner/Severity/ไฟล์ และแบ่งหน้า Findings |
+| **Repository members** | Super User หรือ Operator ของ Repository จัดสมาชิก; Viewer ไม่เห็นรายชื่อ |
+| **Security Policy** | ทุก Role อ่านได้; Super User บันทึกเกณฑ์คะแนนและตรวจสถานะการนำไปใช้กับ Runner |
 | **User Management** | Super User จัดการบัญชี สิทธิ์ และดู Audit log |
 
 ### เพิ่ม Repository และดูผลครั้งแรก
@@ -170,7 +172,11 @@ DEVSECOPS_GITHUB_WORKFLOW=security-gate.yml
 4. Push โค้ดที่เข้าเงื่อนไข Workflow แล้วรอ GitHub Actions สแกนเสร็จ
 5. ดูผลบน Dashboard หรือกด Branch เพื่อเปิด History และรายละเอียด เช่น **Affected file**, **Line** และลิงก์ไฟล์ของ Commit นั้น
 
-Dashboard รับ URL ภายใต้ **GitHub Owner** ที่ตั้งในหน้า **Owner Settings** โดยค่าเริ่มต้นเป็น **TRM-MYOS** ผู้ใช้ที่ Login ทุก Role อ่าน Repository ใน Workspace ร่วมกันได้
+Dashboard รับ URL ภายใต้ **GitHub Owner** ที่ตั้งในหน้า **Owner Settings** โดยค่าเริ่มต้นเป็น **TRM-MYOS** Super User เห็นทุก Repository ส่วน Operator/Viewer เห็นเฉพาะที่เป็นสมาชิก Operator ที่เพิ่ม Repository ใหม่จริงจะเป็นสมาชิกทันที การวาง URL ของรายการเดิมไม่ให้สิทธิ์เข้าร่วมเอง
+
+ปุ่ม **Members** บนรายการ Repository หรือหน้า Monitoring เปิดหน้าจัดสมาชิก ส่วน **Leave repository** ให้ Operator/Viewer ออกด้วยตัวเอง หลังออกแล้วต้องให้สมาชิก Operator หรือ Super User เพิ่มกลับ ประวัติยังอยู่สำหรับสมาชิกคนอื่น การอัปเกรดไม่เดาสมาชิกของ Repository เก่า: Super User ต้องจัดสมาชิกให้ก่อน
+
+History คงตารางเดิมและแบ่งครั้งละ 20 รายการ กด **View details** เพื่อเปิดหน้าแยก **Back to history** คืนตัวกรอง หน้า และตำแหน่งเลื่อน Findings แบ่งครั้งละ 20 รายการ กรองแล้วไม่พบรายการไม่ได้เปลี่ยนผล Gate เป็น ALLOW ลิงก์เก่า `history.html?scan=...` ยังส่งต่อไปหน้ารายละเอียดได้
 
 ### ตั้งค่าบัญชีและ GitHub App จาก Dashboard
 
@@ -197,6 +203,12 @@ Login ด้วย **Super User** แล้วเปิดเมนู **Owner S
 
 **Sync ไม่ได้เริ่มสแกนใหม่** และไม่แก้ Workflow หรือรายงานที่เสียให้เอง ไม่จำเป็นต้องกด Sync ทุกครั้งหาก Backend และการดึงข้อมูลอัตโนมัติทำงานอยู่
 
+### เผยแพร่เกณฑ์คะแนนโดยไม่เปิด Backend ออกอินเทอร์เน็ต
+
+Super User ใช้ **Security Policy → Save threshold → Publish to Central** เพื่อสร้าง PR เปลี่ยนเฉพาะไฟล์ Policy ใน Central หลังผู้มีสิทธิ์ Review/Merge แล้วจึงกด **Check GitHub status** และตรวจ Version ในรายงาน Runner ใหม่ การ Save อย่างเดียวไม่เปลี่ยน Gate บน GitHub
+
+ครั้งแรกต้องเผยแพร่โค้ดที่รองรับฟังก์ชันนี้ และให้ GitHub App เข้าถึง Central พร้อม Contents/Pull requests write ตาม [คู่มือ Policy publication](docs/policy-publication.md) ระบบไม่ Merge เอง ไม่ใช้ PAT และไม่ต้องเปิด Dashboard/Backend รับ Connection จากอินเทอร์เน็ต
+
 ## 6. อ่านผล Score, ALLOW และ BLOCK
 
 คะแนนเริ่มที่ 100 และหักต่อ Finding ตามระดับความรุนแรง:
@@ -214,10 +226,12 @@ Login ด้วย **Super User** แล้วเปิดเมนู **Owner S
 Policy ปัจจุบันจาก [security-policy.yaml](security-policy.yaml) และ [security/policy.py](security/policy.py):
 
 - พบ **CRITICAL หรือ HIGH** อย่างน้อยหนึ่งรายการ → **BLOCK**
-- คะแนนต่ำกว่า **60** → **BLOCK**
+- คะแนนต่ำกว่า **เกณฑ์ที่ใช้ในรอบนั้น** → **BLOCK** (ค่า Central file เริ่มต้นคือ **60**)
 - หากไม่เข้าเงื่อนไขข้างต้น → **ALLOW**
 
 ดังนั้น **คะแนน 75 ก็ BLOCK ได้** เช่น พบ HIGH หนึ่งรายการ คะแนนถูกหัก 25 และติดเงื่อนไข HIGH ด้วย ถึง YAML ระบุ `medium: WARN` แต่ฟังก์ชันตัดสินปัจจุบันคืน ALLOW/BLOCK โดย MEDIUM ยังหักคะแนนและทำให้ BLOCK ได้เมื่อคะแนนต่ำกว่าเกณฑ์
+
+Super User ตั้ง Minimum passing score จำนวนเต็ม 0–100 ในหน้า Security Policy ได้ เก็บค่าและเวอร์ชันใน SQLite พร้อม Audit แต่ **การ Save ไม่ได้แก้เกณฑ์บน GitHub โดยลำพัง** หน้า Policy แสดงว่าต้องตั้ง Runner, รอรายงาน หรือพบเวอร์ชันนั้นในรายงานแล้ว รายละเอียดการเปิดใช้ Policy ที่ลงลายเซ็นอยู่ใน [คู่มือสมาชิกและ Policy](docs/repository-access-and-policy.md) การคำนวณ Score/Grade และ HIGH/CRITICAL BLOCK ยังเหมือนเดิม ผลเก่าไม่ถูกแก้ย้อนหลัง
 
 | ผลการทำงาน | ความหมาย |
 |---|---|
@@ -237,9 +251,16 @@ History นำเข้าจาก Push workflow runs ที่ GitHub ยั�
 
 | การทำงาน | Viewer | Operator | Super User |
 |---|---|---|---|
-| ดู Dashboard, Findings, History และ Policy | ✓ | ✓ | ✓ |
-| เพิ่ม Repository และ Sync ผลเดี่ยว/ทั้งหมด | — | ✓ | ✓ |
+| ดู Dashboard, Findings และ History | เฉพาะสมาชิก | เฉพาะสมาชิก | ทุก Repository |
+| อ่าน Policy | ✓ | ✓ | ✓ |
+| เพิ่ม Repository ใหม่ | — | ✓ เป็นสมาชิกทันที | ✓ ไม่ต้องเป็นสมาชิก |
+| Sync ผลเดี่ยว/ทั้งหมด | — | เฉพาะสมาชิก | ทุก Repository |
+| ดู/เพิ่มสมาชิก | — | เฉพาะ Repository ที่เป็นสมาชิก | ทุก Repository |
+| ถอน Viewer จาก Repository | — | เฉพาะ Repository ที่เป็นสมาชิก | ✓ |
+| ถอน Operator จาก Repository | — | — | ✓ |
+| ออกจาก Repository ด้วยตัวเอง | ✓ | ✓ | ไม่ต้องเป็นสมาชิก |
 | ลบ Repository | — | — | ✓ |
+| แก้เกณฑ์คะแนนผ่าน / Owner Settings | — | — | ✓ |
 | สร้าง/เปิด/ปิดบัญชี และเปลี่ยน Role | — | — | ✓ |
 | ลบบัญชีผู้อื่น และ Reset password | — | — | ✓ |
 | ดู Audit log การเปลี่ยนบัญชี/สิทธิ์ | — | — | ✓ |
@@ -267,6 +288,7 @@ Password เก็บเป็น Argon2id hash และ Session ID เก็�
 | `DEVSECOPS_GITHUB_WORKFLOW` | `security-gate-test.yml` | ค่าเริ่มต้นในโค้ดเดิม; ตั้งเป็น `security-gate.yml` เมื่อใช้ชื่อตามตัวอย่างนี้ครบทุก Repository |
 | `DEVSECOPS_GITHUB_OWNER` | `TRM-MYOS` | Owner เป้าหมายเมื่อยังไม่มีค่าที่บันทึกใน Owner Settings |
 | `DEVSECOPS_GITHUB_POLL_ENABLED` | `true` | เปิดการ Sync อัตโนมัติใน Backend |
+| `DEVSECOPS_POLICY_SIGNING_KEY_PATH` | ไม่กำหนด | Path ของ Ed25519 Private Key แยกสำหรับเผยแพร่ Policy; ไม่ใช้ GitHub App Key |
 
 ใช้ Uvicorn **หนึ่ง Worker** เพื่อไม่ให้เกิด Poller ซ้ำ การตั้ง Timeout ใน Dashboard ไม่ได้เปลี่ยนค่าใน GitHub Runner
 

@@ -268,6 +268,7 @@ def build_summary(
 
     return {
         "status": policy_result["status"],
+        **({"policy": policy_result["policy"]} if "policy" in policy_result else {}),
         "score": score,
         "grade": grade,
         "reason": policy_result["reason"],

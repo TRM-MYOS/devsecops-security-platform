@@ -1,0 +1,26 @@
+/* Shared scan presentation is defined in history.css. */
+body[data-page="scan-detail"] {
+  font-size: 15px;
+}
+.detail-filters {
+  flex-wrap: wrap;
+}
+.detail-filters label {
+  min-width: 130px;
+  flex: 1 1 130px;
+}
+.detail-filters input {
+  max-width: 100%;
+}
+.scan-detail-heading {
+  flex-wrap: wrap;
+}
+.scan-detail-heading > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 550px) {
+  .scan-detail-heading .actions {
+    width: 100%;
+  }
+}

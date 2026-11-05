@@ -24,7 +24,7 @@ function branchResults(info) {
             templateText(trackingDetails(branch)),
             templateText(
               branch.scan_id
-                ? `<a href="history.html?scan=${encodeURIComponent(branch.scan_id)}">View score and findings</a>`
+                ? `<a href="${escapeHtml(scanDetailLink(branch.scan_id))}">View score and findings</a>`
                 : "",
             ),
             "</section>",
@@ -141,11 +141,19 @@ function renderMonitoringRepository() {
       templateText(branches.length === 1 ? "branch" : "branches"),
       "</span>",
       "</div>",
-      '<a class="text-link" href="',
+      '<div class="monitoring-repository-actions" role="group" aria-label="Repository actions">',
+      templateText(
+        canScan()
+          ? `<a class="secondary-button" href="${escapeHtml(membersPageLink(repository))}">${uiIcon("users")}Members</a>`
+          : "",
+      ),
+      '<a class="secondary-button" href="',
       templateText(historyLink(repository)),
-      '">View history ',
-      templateText(uiIcon("arrow")),
+      '">',
+      templateText(uiIcon("history")),
+      "View history",
       "</a>",
+      "</div>",
       "</div>",
       templateText(notice),
       templateText(historyWarning),
@@ -161,6 +169,11 @@ function renderMonitoringRepository() {
             ),
       ),
       "</div>",
+      templateText(
+        !isSuperUser()
+          ? `<footer class="monitoring-repository-access"><div><h4>Repository access</h4><p id="monitoring-leave-help">Leaving removes your access, not the repository.</p></div><button type="button" class="danger-button monitoring-leave-button" data-action="leave-repository" data-id="${escapeHtml(repository.id)}" data-name="${escapeHtml(repository.name)}" aria-describedby="monitoring-leave-help">${uiIcon("logout")}Leave repository</button></footer>`
+          : "",
+      ),
     ].join(""),
   );
 }
@@ -170,7 +183,10 @@ async function loadRepositorySelect({ background = false } = {}) {
   if (state.repositorySelectLoading) return;
   state.repositorySelectLoading = true;
   const select = el("repository-select");
-  const previousSelection = select.value;
+  const previousSelection =
+    select.value ||
+    new URLSearchParams(location.search).get("repository") ||
+    "";
   if (!background) {
     select.disabled = true;
     select.replaceChildren(new Option("Loading repositories...", ""));

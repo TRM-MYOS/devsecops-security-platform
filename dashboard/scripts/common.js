@@ -63,6 +63,8 @@ const SAFE_PAGES = new Set([
   "/dashboard/policy.html",
   "/dashboard/users.html",
   "/dashboard/settings.html",
+  "/dashboard/scan-detail.html",
+  "/dashboard/members.html",
 ]);
 const el = (id) => document.getElementById(id);
 const canScan = () => ["superuser", "operator"].includes(state.user?.role);
@@ -387,6 +389,8 @@ function navigationIcon(name) {
 }
 
 function renderShell() {
+  const navigationPage =
+    PAGE === "scan-detail" ? "history" : PAGE === "members" ? "scan" : PAGE;
   const links = [
     ["dashboard", "index.html", "Dashboard"],
     ["scan", "scan.html", "Repository Monitoring"],
@@ -415,11 +419,11 @@ function renderShell() {
         .map(([page, path, label]) =>
           [
             '<a class="nav-item ',
-            templateText(PAGE === page ? "active" : ""),
+            templateText(navigationPage === page ? "active" : ""),
             '" href="',
             templateText(path),
             '" ',
-            templateText(PAGE === page ? 'aria-current="page"' : ""),
+            templateText(navigationPage === page ? 'aria-current="page"' : ""),
             " ",
             templateText(
               ["users", "settings"].includes(page) ? 'data-role="admin"' : "",
@@ -497,7 +501,10 @@ function applyIdentity() {
     node.hidden = !isSuperUser();
   });
   if (el("viewer-notice")) el("viewer-notice").hidden = canScan();
-  if (["users", "settings"].includes(PAGE) && !isSuperUser())
+  if (
+    (["users", "settings"].includes(PAGE) && !isSuperUser()) ||
+    (PAGE === "members" && !canScan())
+  )
     location.replace("/dashboard/");
 }
 
@@ -548,7 +555,11 @@ async function updateHealth() {
 async function startProtectedPage() {
   try {
     await refreshIdentity();
-    if (["users", "settings"].includes(PAGE) && !isSuperUser()) return;
+    if (
+      (["users", "settings"].includes(PAGE) && !isSuperUser()) ||
+      (PAGE === "members" && !canScan())
+    )
+      return;
     renderShell();
     el("auth-check").hidden = true;
     el("protected-app").hidden = false;
@@ -567,7 +578,9 @@ async function startProtectedPage() {
       });
       await loadRepositorySelect();
     }
-    if (PAGE === "history") await loadHistory();
+    if (PAGE === "history" && initializeHistory()) await loadHistory();
+    if (PAGE === "scan-detail") await loadScanDetail();
+    if (PAGE === "members") await initializeMembers();
     if (PAGE === "policy") await loadPolicy();
     if (PAGE === "settings") await initializeOwnerSettings();
     if (PAGE === "users") {
@@ -651,6 +664,9 @@ function uiIcon(name, extraClass = "") {
     file: '<path d="M5 3h9l5 5v13H5zM14 3v6h5M8 13h8M8 17h6"/>',
     list: '<path d="M8 5h13M8 12h13M8 19h13M3 5h.01M3 12h.01M3 19h.01"/>',
     user: '<circle cx="12" cy="7" r="4"/><path d="M4 22v-4a8 8 0 0 1 16 0v4"/>',
+    users:
+      '<circle cx="9" cy="7" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6M18 13a5 5 0 0 1 3 5v3"/>',
+    logout: '<path d="M9 4H4v16h5M9 12h12m-5-5 5 5-5 5"/>',
     calendar:
       '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6M17 2v6M3 11h18"/>',
     commit: '<circle cx="12" cy="12" r="4"/><path d="M2 12h6M16 12h6"/>',
@@ -703,12 +719,120 @@ document.addEventListener(
   true,
 );
 function historyLink(repo, branch = null, scan = null) {
+  if (scan !== null) return escapeHtml(scanDetailLink(scan));
   const params = new URLSearchParams({
     repository: String(repo.id),
   });
   if (branch !== null) params.set("branch", branch);
   if (scan !== null) params.set("scan", String(scan));
   return `history.html?${escapeHtml(params.toString())}`;
+}
+
+function safeHistoryReturn(value) {
+  try {
+    const base = new URL("/dashboard/", location.href || "http://localhost/");
+    const url = new URL(String(value || "history.html").slice(0, 3000), base);
+    if (
+      url.origin !== base.origin ||
+      url.pathname !== "/dashboard/history.html"
+    )
+      return "history.html";
+    url.searchParams.delete("scan");
+    return `history.html${url.search}`;
+  } catch {
+    return "history.html";
+  }
+}
+function scanDetailLink(id, returnUrl = "history.html") {
+  return `scan-detail.html?${new URLSearchParams({ scan: String(id), return: safeHistoryReturn(returnUrl) })}`;
+}
+function openScanDetails(id) {
+  const returnUrl =
+    PAGE === "history" ? `history.html${location.search}` : "history.html";
+  if (PAGE === "history") {
+    rememberHistory();
+    try {
+      sessionStorage.setItem(
+        "history-scroll:" + location.search,
+        String(window.scrollY),
+      );
+    } catch {}
+  }
+  location.assign(
+    scanDetailLink(
+      id,
+      PAGE === "history" ? `history.html${location.search}` : returnUrl,
+    ),
+  );
+}
+function paginationControls(page, pages, action) {
+  return `<nav class="pagination" aria-label="Pagination"><button type="button" class="small-button" data-action="${action}" data-page="${page - 1}" ${page <= 1 ? "disabled" : ""}>Previous</button><span>Page ${page} of ${pages}</span><button type="button" class="small-button" data-action="${action}" data-page="${page + 1}" ${page >= pages ? "disabled" : ""}>Next</button></nav>`;
+}
+function repositoryAccessActions(repo) {
+  return `${canScan() ? `<a class="small-button" href="${escapeHtml(membersPageLink(repo))}">Members</a>` : ""}${!isSuperUser() ? `<button type="button" class="secondary-button" data-action="leave-repository" data-id="${escapeHtml(repo.id)}" data-name="${escapeHtml(repo.name)}">Leave repository</button>` : ""}`;
+}
+
+function membersPageLink(repo) {
+  let origin = "index.html";
+  if (PAGE === "scan") {
+    const params = new URLSearchParams(location.search);
+    params.set("repository", String(repo.id));
+    origin = `scan.html?${params}`;
+  } else if (PAGE === "history")
+    origin = safeHistoryReturn(`history.html${location.search}`);
+  else if (PAGE === "dashboard") origin = `index.html${location.search}`;
+  return `members.html?${new URLSearchParams({ repository: String(repo.id), return: origin })}`;
+}
+
+function memberReturnInfo(value) {
+  const fallback = { href: "index.html", label: "Dashboard", direct: true };
+  if (!value) return fallback;
+  try {
+    const base = new URL("/dashboard/", location.href || "http://localhost/");
+    const url = new URL(String(value).slice(0, 3000), base);
+    const pages = {
+      "/dashboard/": "Dashboard",
+      "/dashboard/index.html": "Dashboard",
+      "/dashboard/scan.html": "Repository Monitoring",
+      "/dashboard/history.html": "Scan History",
+    };
+    if (url.origin !== base.origin || !pages[url.pathname]) return fallback;
+    const file = url.pathname.split("/").pop() || "index.html";
+    const href =
+      file === "history.html"
+        ? safeHistoryReturn(`${file}${url.search}`)
+        : `${file}${url.search}${url.hash}`;
+    return { href, label: pages[url.pathname], direct: false };
+  } catch {
+    return fallback;
+  }
+}
+async function leaveRepository(id, button) {
+  if (isSuperUser() || button.disabled) return;
+  if (
+    !window.confirm(
+      `Leave "${button.dataset.name || "this repository"}"? You will need an invitation to access it again.`,
+    )
+  )
+    return;
+  button.disabled = true;
+  try {
+    await fetchJson(`${API.repositories}/${encodeURIComponent(id)}/leave`, {
+      method: "POST",
+      body: "{}",
+    });
+    state.selectedDetail = null;
+    state.scans.clear();
+    state.monitoringRepositories.clear();
+    state.latestScans.clear();
+    if (PAGE === "dashboard") await loadDashboard();
+    else if (PAGE === "scan") await loadRepositorySelect();
+    else location.replace("/dashboard/");
+  } catch (error) {
+    setMessage("global-message", error.message, "error");
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function branchState(branch) {
@@ -910,7 +1034,7 @@ async function runScan(repositoryId = "all") {
             templateText(trackingDetails(item)),
             templateText(
               item.scan_id
-                ? `<a href="history.html?scan=${encodeURIComponent(item.scan_id)}">Open findings</a>`
+                ? `<a href="${escapeHtml(scanDetailLink(item.scan_id))}">Open findings</a>`
                 : "",
             ),
             "</article>",
@@ -1015,9 +1139,30 @@ async function dispatchAction(button) {
     case "reload-policy":
       return loadPolicy();
     case "close-findings":
-      return closeHistoryFindings();
+      return location.assign(
+        safeHistoryReturn(new URLSearchParams(location.search).get("return")),
+      );
     case "show-findings":
-      return showHistoryFindings(id);
+      return openScanDetails(id);
+    case "history-page":
+      state.historyPage = Number(button.dataset.page);
+      renderHistoryList();
+      rememberHistory();
+      el("history-container")?.scrollIntoView({ block: "start" });
+      return;
+    case "findings-page":
+      state.detailPage = Number(button.dataset.page);
+      renderDetailFindings();
+      el("detail-findings-list")?.scrollIntoView({ block: "start" });
+      return;
+    case "leave-repository":
+      return leaveRepository(id, button);
+    case "remove-member":
+      return removeMember(id, button);
+    case "reload-members":
+      return loadMembers();
+    case "reload-detail":
+      return loadScanDetail();
     case "reload-users":
       return loadUsers();
     case "reload-audit":
@@ -1119,6 +1264,8 @@ async function refreshVisiblePage() {
       await loadHistory({
         background: true,
       });
+    if (PAGE === "scan-detail") await loadScanDetail({ background: true });
+    if (PAGE === "members") await loadMembers({ background: true });
     // Monitoring has editable controls; retain its selection during a refresh.
     if (PAGE === "scan" && !el("repository-select")?.matches(":focus"))
       await loadRepositorySelect({

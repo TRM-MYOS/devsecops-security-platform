@@ -1,5 +1,18 @@
 /* Security Policy: display the server-provided policy and scoring rules. */
 /* Original cascade order is retained within this file, including responsive rules. */
+.policy-publication {
+  border-top: 1px solid var(--line);
+  margin-top: 20px;
+  padding-top: 16px;
+}
+.policy-publication p {
+  color: var(--muted);
+  font-size: 13px;
+}
+body[data-page="policy"] code {
+  overflow-wrap: anywhere;
+}
+
 .policy-summary {
   display: flex;
   align-items: center;
