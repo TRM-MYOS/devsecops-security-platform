@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Owner Settings / DevSecOps</title>
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/layout.css" />
+    <link rel="stylesheet" href="css/components.css" />
+    <link rel="stylesheet" href="css/settings.css" />
+    <script src="scripts/common.js" defer></script>
+    <script src="scripts/settings.js" defer></script>
+  </head>
+  <body data-page="settings">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <div id="auth-check" class="auth-check" role="status">
+      Checking your session...
+    </div>
+    <div class="app" id="protected-app" hidden>
+      <div id="navigation-shell"></div>
+      <main class="main" id="main-content" tabindex="-1">
+        <header class="topbar">
+          <div class="page-title">
+            <button
+              type="button"
+              class="mobile-menu icon-button"
+              id="menu-toggle"
+              aria-label="Open navigation"
+              aria-controls="sidebar"
+              aria-expanded="false"
+            >
+              <svg
+                width="19"
+                height="19"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <div class="page-heading">
+              <span
+                class="page-heading-icon"
+                data-ui-icon="settings"
+                aria-hidden="true"
+              ></span>
+              <div class="page-heading-copy">
+                <h1 class="page-heading-title">Owner Settings</h1>
+                <p class="page-description">
+                  Configure the GitHub account and App used to monitor security
+                  results.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="account-controls">
+            <div
+              class="account-avatar"
+              id="user-avatar"
+              aria-hidden="true"
+            ></div>
+            <div class="account-details">
+              <strong id="current-username"></strong
+              ><span id="current-role"></span>
+            </div>
+            <button
+              type="button"
+              class="secondary-button compact"
+              id="logout-button"
+            >
+              Log out
+            </button>
+          </div>
+        </header>
+        <div
+          id="global-message"
+          class="message-region"
+          aria-live="polite"
+        ></div>
+        <div class="owner-settings-layout">
+          <section class="content-section" aria-labelledby="connection-heading">
+            <div class="section-header">
+              <div>
+                <h2 id="connection-heading">GitHub connection</h2>
+                <p>
+                  Only Super Users can change these settings. Save verifies the
+                  connection before replacing the current values.
+                </p>
+              </div>
+            </div>
+            <p
+              id="settings-source"
+              class="owner-settings-note"
+              aria-live="polite"
+            >
+              Loading settings...
+            </p>
+            <form id="owner-settings-form">
+              <fieldset
+                id="owner-settings-fields"
+                class="owner-settings-fields"
+                disabled
+              >
+                <legend>GitHub Owner and App settings</legend>
+                <div class="owner-settings-grid">
+                  <div class="form-field owner-settings-wide">
+                    <label for="setting-owner">GitHub Owner</label>
+                    <input
+                      id="setting-owner"
+                      name="owner"
+                      required
+                      maxlength="39"
+                      autocomplete="off"
+                      spellcheck="false"
+                      aria-describedby="hint-owner error-owner"
+                    />
+                    <span id="hint-owner" class="field-hint"
+                      >The account or organization that owns the target
+                      repositories.</span
+                    >
+                    <span id="error-owner" class="owner-field-error"></span>
+                  </div>
+                  <div class="form-field">
+                    <label for="setting-app_id">GitHub App ID</label>
+                    <input
+                      id="setting-app_id"
+                      name="app_id"
+                      required
+                      maxlength="20"
+                      inputmode="numeric"
+                      autocomplete="off"
+                      aria-describedby="hint-app_id error-app_id"
+                    />
+                    <span id="hint-app_id" class="field-hint"
+                      >The numeric App ID, separate from the Client ID.</span
+                    >
+                    <span id="error-app_id" class="owner-field-error"></span>
+                  </div>
+                  <div class="form-field">
+                    <label for="setting-installation_id">Installation ID</label>
+                    <input
+                      id="setting-installation_id"
+                      name="installation_id"
+                      required
+                      maxlength="20"
+                      inputmode="numeric"
+                      autocomplete="off"
+                      aria-describedby="hint-installation_id error-installation_id"
+                    />
+                    <span id="hint-installation_id" class="field-hint"
+                      >The App installation for the GitHub Owner entered
+                      above.</span
+                    >
+                    <span
+                      id="error-installation_id"
+                      class="owner-field-error"
+                    ></span>
+                  </div>
+                  <div class="form-field owner-settings-wide">
+                    <label for="setting-private_key_path"
+                      >Private Key Path</label
+                    >
+                    <input
+                      id="setting-private_key_path"
+                      name="private_key_path"
+                      required
+                      maxlength="2048"
+                      autocomplete="off"
+                      spellcheck="false"
+                      aria-describedby="hint-private_key_path error-private_key_path"
+                    />
+                    <span id="hint-private_key_path" class="field-hint"
+                      >Absolute .pem path on the Backend server, not the
+                      browser's computer. Keep the key outside the project; its
+                      contents are never displayed.</span
+                    >
+                    <span
+                      id="error-private_key_path"
+                      class="owner-field-error"
+                    ></span>
+                  </div>
+                  <div class="form-field owner-settings-wide">
+                    <label for="setting-workflow">Workflow filename</label>
+                    <input
+                      id="setting-workflow"
+                      name="workflow"
+                      required
+                      maxlength="126"
+                      placeholder="security-gate.yml"
+                      autocomplete="off"
+                      spellcheck="false"
+                      aria-describedby="hint-workflow error-workflow"
+                    />
+                    <span id="hint-workflow" class="field-hint"
+                      >The same filename in each target repository's
+                      .github/workflows/ directory. Checked per repository
+                      during sync.</span
+                    >
+                    <span id="error-workflow" class="owner-field-error"></span>
+                  </div>
+                </div>
+                <div class="owner-settings-actions">
+                  <button
+                    type="button"
+                    class="secondary-button"
+                    id="test-owner-connection"
+                  >
+                    <span data-ui-icon="link" aria-hidden="true"></span>Test
+                    connection
+                  </button>
+                  <button
+                    type="submit"
+                    class="primary-button"
+                    id="save-owner-settings"
+                  >
+                    <span data-ui-icon="settings" aria-hidden="true"></span>Save
+                    settings
+                  </button>
+                </div>
+              </fieldset>
+              <div
+                id="settings-message"
+                class="message-region"
+                aria-live="polite"
+              ></div>
+            </form>
+          </section>
+          <aside
+            class="content-section"
+            aria-labelledby="settings-help-heading"
+          >
+            <h2 id="settings-help-heading">How settings apply</h2>
+            <p class="owner-settings-note">
+              Test connection checks the entered values without saving. Save
+              repeats the check and applies the verified connection to the next
+              sync.
+            </p>
+            <h3>Existing repositories</h3>
+            <p class="owner-settings-note">
+              Repositories outside the new Owner stop being monitored. Their
+              scan history and findings remain available. Add the new Owner's
+              repository URLs in Repository Monitoring.
+            </p>
+            <h3>Configuration priority</h3>
+            <p class="owner-settings-note">
+              Saved database settings take priority over Environment, .env and
+              defaults. A Backend restart is not needed after saving.
+            </p>
+            <h3>Central Security Platform</h3>
+            <p class="owner-settings-note">
+              Changing the target Owner does not change the trusted Central
+              Workflow or its ALLOW/BLOCK rules. Each target still needs its
+              security workflow and App access configured on GitHub.
+            </p>
+            <p class="owner-settings-note">
+              Setting changes are recorded in the administrative audit under
+              User Management.
+            </p>
+          </aside>
+        </div>
+        <footer class="main-footer">
+          <span>DevSecOps Security Platform</span
+          ><span>Central security / Clear decisions</span>
+        </footer>
+      </main>
+    </div>
+  </body>
+</html>

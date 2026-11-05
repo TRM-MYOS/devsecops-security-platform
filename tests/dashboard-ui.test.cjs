@@ -8,6 +8,7 @@ const dashboardDirectory = path.join(__dirname, '../dashboard');
 const pageFiles = {
   dashboard: 'index.html', scan: 'scan.html', history: 'history.html',
   policy: 'policy.html', users: 'users.html', login: 'login.html',
+  settings: 'settings.html', 'scan-detail':'scan-detail.html', members:'members.html',
 };
 
 function pageScripts(page) {
@@ -30,7 +31,8 @@ function harness(search = '?repository=1&branch=test%2Fallow&scan=2', page = 'hi
   };
   const context = {
     URL, URLSearchParams, console,
-    location: {search},
+    location: {search,href:'https://local/dashboard/'+pageFiles[page]+search,assign:url=>{context.navigation=url;},replace:url=>{context.redirect=url;}},
+    sessionStorage: {getItem:key=>context.storage?.[key]??null,setItem:(key,value)=>{context.storage??={};context.storage[key]=value;}},
     document: {
       body: {dataset: {page}}, visibilityState: 'visible',
       getElementById: node,
@@ -38,7 +40,7 @@ function harness(search = '?repository=1&branch=test%2Fallow&scan=2', page = 'hi
       querySelectorAll: () => [],
     },
     window: {
-      matchMedia: () => ({}), addEventListener: () => {},
+      matchMedia: () => ({}), addEventListener: () => {}, scrollY:128, scrollTo:()=>{},
       setInterval: (_, delay) => intervals.push(delay),
     },
   };
@@ -58,14 +60,15 @@ test('each page loads shared assets and its own script without duplicate startup
   const scripts = {
     dashboard: 'dashboard', scan: 'monitoring', history: 'history',
     policy: 'policy', users: 'users', login: 'login',
+    settings: 'settings', 'scan-detail':'scan-detail', members:'members',
   };
   for (const [page, script] of Object.entries(scripts)) {
     assert.deepEqual(pageScripts(page).map(item => item.name), [
-      'scripts/common.js', `scripts/${script}.js`,
+      'scripts/common.js', ...(['history','scan-detail'].includes(page)?['scripts/scan-renderer.js']:[]), `scripts/${script}.js`,
     ]);
     const html = fs.readFileSync(path.join(dashboardDirectory, pageFiles[page]), 'utf8');
     const styles = [...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map(match => match[1]);
-    assert.deepEqual(styles, ['css/base.css', 'css/layout.css', 'css/components.css', `css/${script}.css`]);
+    assert.deepEqual(styles, ['css/base.css', 'css/layout.css', 'css/components.css', ...(['scan-detail'].includes(page)?['css/history.css']:[]), `css/${script}.css`]);
     for (const file of styles) assert.ok(fs.existsSync(path.join(dashboardDirectory, file)));
     const h = harness('', page);
     assert.deepEqual(h.intervals, [5000, 60000]);
@@ -88,6 +91,61 @@ test('shared template formatting preserves interpolation semantics and does not 
   assert.equal(h.run('templateText("<unsafe>")'), '<unsafe>');
   assert.equal(h.run('templateText(escapeHtml("<unsafe>"))'), '&lt;unsafe&gt;');
   assert.throws(() => h.run('templateText(Symbol("test"))'), /Symbol/);
+});
+
+function settingsHarness() {
+  const h = harness('', 'settings');
+  h.run('state.user={role:"superuser"};');
+  const fields = ['owner','app_id','installation_id','private_key_path','workflow'];
+  for (const field of fields) {
+    h.node(`setting-${field}`).value = field === 'owner' ? 'new-owner' : 'test-value';
+    h.node(`setting-${field}`).setAttribute = () => {};
+  }
+  h.node('owner-settings-form').reportValidity = () => true;
+  h.node('owner-settings-form').setAttribute = () => {};
+  h.run('setMessage=(id,text,type)=>{el(id).textContent=text;el(id).messageType=type;};');
+  h.node('settings-message').classList = {toggle: () => {}};
+  return h;
+}
+
+test('Owner Settings test sends entered values without saving and blocks duplicate submissions', async () => {
+  const h = settingsHarness();
+  h.run('globalThis.calls=[]; fetchJson=(url,options)=>new Promise(resolve=>{calls.push({url,options});globalThis.finish=resolve;});');
+  const pending = h.run('submitOwnerSettings(false)');
+  await h.run('submitOwnerSettings(true)');
+  assert.equal(h.run('calls.length'), 1);
+  assert.equal(h.run('calls[0].url'), '/api/owner-settings/test');
+  assert.equal(h.run('JSON.parse(calls[0].options.body).owner'), 'new-owner');
+  assert.equal(h.node('owner-settings-fields').disabled, true);
+  h.run('finish({message:"Connection verified.",repositories_accessible:2})');
+  await pending;
+  assert.ok(h.node('settings-message').textContent.includes('have not been saved'));
+  assert.equal(h.node('owner-settings-fields').disabled, false);
+});
+
+test('Owner Settings errors remain text, highlight fields and preserve entered values', async () => {
+  const h = settingsHarness();
+  let focused = false;
+  h.node('setting-owner').focus = () => {focused = true;};
+  h.run('fetchJson=async()=>{const error=new ApiError("Invalid settings",422);error.fields={owner:"<invalid owner>"};throw error;};');
+  await h.run('submitOwnerSettings(true)');
+  assert.equal(h.node('error-owner').textContent, '<invalid owner>');
+  assert.equal(h.node('setting-owner').value, 'new-owner');
+  assert.equal(h.node('owner-settings-fields').disabled, false);
+  assert.equal(focused, true);
+});
+
+test('Owner Settings saves verified values and refreshes connection status without starting a scan', async () => {
+  const h = settingsHarness();
+  h.run(`globalThis.calls=[]; fetchJson=async(url,options)=>{calls.push({url,options});return {source:"database",updated_at:null,settings:{owner:"new-owner",app_id:"123",installation_id:"456",private_key_path:"/safe/test.pem",workflow:"security-gate.yml"}}}; initializeGitHubMonitor=async(autoSync)=>{calls.push({autoSync})};`);
+  await h.run('submitOwnerSettings(true)');
+  assert.equal(h.run('calls[0].url'), '/api/owner-settings');
+  assert.equal(h.run('calls[1].autoSync'), false);
+  assert.equal(h.node('setting-app_id').value, '123');
+  assert.ok(h.node('settings-message').textContent.includes('no Backend restart'));
+  h.run('state.user={role:"viewer"};');
+  await h.run('submitOwnerSettings(true)');
+  assert.equal(h.run('calls.length'), 2);
 });
 
 test('repository-scoped history can render shared branch disclosures without the Dashboard script', () => {
@@ -120,50 +178,34 @@ test('unknown locations remain visible, missing lines and unsafe paths do not in
   assert.ok(!html.includes('Open file on GitHub'));
 });
 
-test('close during findings request removes scan from URL and ignores late response', async () => {
-  const h = harness();
-  let resolve;
-  h.context.pending = new Promise(done => { resolve = done; });
-  h.run('fetchJson = () => pending');
-  const request = h.run('showHistoryFindings("2")');
-  assert.ok(h.node('history-detail').innerHTML.includes('Close details'));
-  h.run('closeHistoryFindings()');
-  assert.equal(h.node('history-detail').hidden, true);
-  assert.equal(new URLSearchParams(h.context.location.search).get('scan'), null);
-  assert.equal(new URLSearchParams(h.context.location.search).get('branch'), 'test/allow');
-  resolve({findings: []});
-  await request;
-  assert.equal(h.node('history-detail').innerHTML, '');
-  assert.equal(h.node('history-detail').hidden, true);
+test('View opens independent scan details and preserves History filters and scroll', () => {
+  const h=harness('?repository=1&q=fix&page=2');
+  h.run('initializeHistory();state.historyPage=2;openScanDetails("2")');
+  const target=new URL(h.context.navigation,'https://local/dashboard/');
+  assert.equal(target.pathname,'/dashboard/scan-detail.html');
+  assert.equal(target.searchParams.get('scan'),'2');
+  assert.ok(target.searchParams.get('return').includes('q=fix'));
+  assert.ok(target.searchParams.get('return').includes('page=2'));
+  assert.equal(Object.values(h.context.storage)[0],'128');
 });
 
-test('background history refresh updates list without changing or scrolling open details', async () => {
-  const h = harness();
-  h.context.calls = [];
-  h.run('fetchJson = async url => { calls.push(url); return url === API.scans ? {scans:[state.scans.get("2")]} : {repositories:[{id:1,name:"test",tracking:{branches:[]}}]}; }');
-  h.node('history-detail').hidden = false;
-  h.node('history-detail').innerHTML = 'Reading scan 2';
+test('background History refresh updates only the list and never requests inline findings', async () => {
+  const h=harness('?repository=1'); h.context.calls=[];
+  h.run('fetchJson=async url=>{calls.push(url);return url===API.scans?{scans:[state.scans.get("2")]}:{repositories:[{id:1,name:"test",tracking:{branches:[]}}]}}');
   await h.run('loadHistory({background:true})');
-  assert.equal(h.node('history-detail').innerHTML, 'Reading scan 2');
-  assert.equal(h.scrolls(), 0);
-  assert.ok(!h.context.calls.some(url => url.includes('/findings')));
-  h.run('closeHistoryFindings()');
-  await h.run('loadHistory({background:true})');
-  assert.equal(h.node('history-detail').hidden, true);
-  assert.equal(h.scrolls(), 0);
+  assert.ok(h.node('history-container').innerHTML.includes('test'));
+  assert.equal(h.scrolls(),0);
+  assert.ok(!h.context.calls.some(url=>url.includes('/findings')));
 });
 
-test('late history response cannot restore a closed scan in the breadcrumb', async () => {
-  const h = harness();
-  let resolve;
-  h.context.pending = new Promise(done => { resolve = done; });
-  h.run('fetchJson = () => pending');
-  const request = h.run('loadHistory({background:true})');
-  h.run('closeHistoryFindings()');
-  resolve({scans: []});
-  await request;
-  assert.equal(h.node('history-scope').innerHTML, '');
-  assert.equal(h.node('history-detail').hidden, true);
+test('legacy History scan links redirect to details without a return loop or external return', () => {
+  const h=harness(); assert.equal(h.run('initializeHistory()'),false);
+  const target=new URL(h.context.redirect,'https://local/dashboard/');
+  assert.equal(target.pathname,'/dashboard/scan-detail.html');
+  assert.equal(new URL(target.searchParams.get('return'),'https://local/dashboard/').searchParams.has('scan'),false);
+  for(const url of ['https://evil.example/dashboard/history.html','//evil.example','javascript:alert(1)','/dashboard/users.html']) {
+    h.context.returnUrl=url; assert.equal(h.run('safeHistoryReturn(returnUrl)'),'history.html');
+  }
 });
 
 test('background refresh skips hidden tabs and prevents overlapping requests', async () => {
@@ -183,15 +225,14 @@ test('background refresh skips hidden tabs and prevents overlapping requests', a
   await first;
 });
 
-test('failed findings request still provides a working close control', async () => {
-  const h = harness();
-  h.run('fetchJson = async () => { throw new Error("Report not available"); }');
-  await h.run('showHistoryFindings("2", {scroll:false})');
-  assert.ok(h.node('history-detail').innerHTML.includes('Close details'));
-  assert.ok(h.node('history-detail').innerHTML.includes('Report not available'));
-  assert.equal(h.scrolls(), 0);
-  h.run('closeHistoryFindings()');
-  assert.equal(h.node('history-detail').hidden, true);
+test('detail Findings failure retains Back and clears stale scan content', async () => {
+  const h=harness('?scan=2','scan-detail');
+  h.run('fetchJson=async url=>{if(url.endsWith("/findings"))throw new ApiError("Access removed",404);return {scan:state.scans.get("2")}}');
+  await h.run('loadScanDetail()');
+  assert.ok(h.node('history-detail').innerHTML.includes('Back to history'));
+  assert.ok(h.node('history-detail').innerHTML.includes('Access removed'));
+  assert.equal(h.run('state.selectedDetail'),null);
+  assert.equal(h.node('history-scope').innerHTML,'');
 });
 
 test('history search and filters combine without changing the selected scan', () => {
@@ -221,15 +262,14 @@ test('history stats describe all scoped records before search filters', () => {
   assert.ok(h.node('history-stats-scope').textContent.includes('before search filters'));
 });
 
-test('new scans do not narrow the history table after selecting a scan', async () => {
-  const h = harness('');
-  h.run(`fetchJson = async url => url === API.scans ? {scans:[state.scans.get('2'),{id:3,repository_id:9,repository_name:'another',status:'ALLOW'}]} : {repositories:[]};`);
+test('History pagination limits rows and retains its scope during background refresh', async () => {
+  const h=harness('');
+  h.run('globalThis.rows=Array.from({length:45},(_,i)=>({id:i+1,repository_id:1,repository_name:"repo-"+(i+1),status:"ALLOW"}));fetchJson=async()=>({scans:rows});state.historyPage=2;');
   await h.run('loadHistory({background:true})');
-  h.run('fetchJson = async () => ({findings:[]})');
-  await h.run('showHistoryFindings("2",{scroll:false})');
-  h.run(`fetchJson = async url => url === API.scans ? {scans:[state.scans.get('2'),{id:3,repository_id:9,repository_name:'another',status:'ALLOW'}]} : {repositories:[]};`);
-  await h.run('loadHistory({background:true})');
-  assert.ok(h.node('history-container').innerHTML.includes('another'));
+  const html=h.node('history-container').innerHTML;
+  assert.equal((html.match(/data-action="show-findings"/g)||[]).length,20);
+  assert.ok(html.includes('Page 2 of 3'));
+  assert.equal(h.run('state.scopedScans.length'),45);
 });
 
 test('finding severity sort is stable, preserves source order and supports scanner filtering', () => {
@@ -270,24 +310,21 @@ test('ALLOW, BLOCK, unknown policies and legacy reports render distinct detail s
   assert.ok(h.node('detail-findings-list').innerHTML.includes('No matching findings'));
 });
 
-test('failed run history opens without requesting findings or claiming a clean result', async () => {
-  const h = harness();
-  h.run(`state.scans.set('run-1-10-1',{id:'run-1-10-1',repository_id:1,report_available:false,execution_status:'error',status:null,score:null,reason:'Report validation failed',github:{run_id:10,run_attempt:1,branch:'main'}});
-    fetchJson=async()=>{throw new Error('Must not request findings for an unvalidated report')}`);
-  await h.run(`showHistoryFindings('run-1-10-1',{scroll:false})`);
-  assert.ok(h.node('history-detail').innerHTML.includes('ERROR'));
+test('failed Run details load without findings or a fake ALLOW and stay on the same record', async () => {
+  const h=harness('?scan=run-1-10-1','scan-detail');h.context.calls=[];
+  h.run(`fetchJson=async url=>{calls.push(url);if(url.includes('/findings'))throw Error('No report');return {scan:{id:'run-1-10-1',repository_id:1,repository_name:'repo',report_available:false,execution_status:'error',status:null,score:null,reason:'Report validation failed',github:{branch:'main'}}}}`);
+  await h.run('loadScanDetail()');
   assert.ok(h.node('history-detail').innerHTML.includes('Policy not evaluated'));
   assert.ok(h.node('detail-findings-list').innerHTML.includes('No validated report'));
-  assert.ok(!h.node('detail-findings-list').innerHTML.includes('No findings in this recorded scan'));
-  assert.equal(h.scrolls(), 0);
+  await h.run('loadScanDetail({background:true})');
+  assert.ok(h.context.calls.every(url=>url.endsWith('/run-1-10-1')));
 });
 
 function monitoringHarness() {
   const h = harness('', 'scan');
   h.context.Option = function(text, value) { this.text = text; this.value = value; };
   const select = h.node('repository-select');
-  select.value = '';
-  select.options = [];
+  select.value = ''; select.options = [];
   select.replaceChildren = (...options) => { select.options = options; select.value = options[0]?.value || ''; };
   select.add = option => select.options.push(option);
   return h;
@@ -378,6 +415,101 @@ function usersHarness() {
   h.node('reset-password-dialog').close = () => { h.node('reset-password-dialog').open = false; };
   return h;
 }
+
+test('User access combines username search and Role and retains filters after refresh', async () => {
+  const h = usersHarness();
+  h.context.fixtureUsers.push(
+    {id:3,username:'View-Operator',role:'operator',is_active:true},
+    {id:4,username:'Other',role:'viewer',is_active:false},
+  );
+  h.run('userAccessFilters.search="  VIEW  ";userAccessFilters.role="viewer";');
+  await h.run('loadUserList()');
+  assert.equal(h.node('user-access-count').textContent, '1 of 4 users');
+  assert.ok(h.node('users-container').innerHTML.includes('>viewer</strong>'));
+  assert.ok(!h.node('users-container').innerHTML.includes('View-Operator'));
+  assert.equal(h.run('state.users.size'), 4);
+  h.context.fixtureUsers[1].role = 'operator';
+  await h.run('loadUserList()');
+  assert.equal(h.node('user-access-count').textContent, '0 of 4 users');
+  assert.ok(h.node('users-container').innerHTML.includes('No matching users'));
+  assert.equal(h.run('userAccessFilters.search'), '  VIEW  ');
+  assert.equal(h.run('userAccessFilters.role'), 'viewer');
+  h.run('userAccessFilters.search="";userAccessFilters.role="";renderUserList();');
+  assert.equal(h.node('user-access-count').textContent, '4 of 4 users');
+  assert.ok(h.node('users-container').innerHTML.includes('Disabled'));
+});
+
+test('failed user refresh clears stale accounts even when the filter changes', async () => {
+  const h = usersHarness();
+  await h.run('loadUserList()');
+  h.run('fetchJson=async()=>{throw new Error("Access revoked");};');
+  await h.run('loadUserList()');
+  h.run('userAccessFilters.search="admin";renderUserList();');
+  assert.equal(h.run('state.users.size'), 0);
+  assert.equal(h.node('user-access-count').textContent, 'User list unavailable');
+  assert.ok(h.node('users-container').innerHTML.includes('Access revoked'));
+  assert.ok(!h.node('users-container').innerHTML.includes('data-action="delete-user"'));
+});
+
+test('User access search and Role events filter the cached list without additional requests', async () => {
+  const h = usersHarness();
+  const handlers = {};
+  for (const id of ['user-access-search','user-access-role','create-user-form','reset-password-form','reset-password-dialog','cancel-reset-password']) {
+    h.node(id).addEventListener = (name, callback) => {handlers[id+':'+name]=callback;};
+  }
+  await h.run('initializeUserManagement()');
+  const calls = h.context.calls.length;
+  h.node('user-access-search').value = 'VIEW';
+  handlers['user-access-search:input']({target:h.node('user-access-search')});
+  h.node('user-access-role').value = 'operator';
+  handlers['user-access-role:change']({target:h.node('user-access-role')});
+  assert.equal(h.node('user-access-count').textContent, '0 of 2 users');
+  h.node('user-access-role').value = 'viewer';
+  handlers['user-access-role:change']({target:h.node('user-access-role')});
+  assert.equal(h.node('user-access-count').textContent, '1 of 2 users');
+  assert.equal(h.context.calls.length, calls);
+});
+
+test('Members links preserve the originating page and the selected Monitoring repository', () => {
+  const h = harness('?q=active', 'dashboard');
+  let link = new URL(h.run('membersPageLink({id:7})'), 'https://local/dashboard/');
+  assert.equal(link.searchParams.get('return'), 'index.html?q=active');
+  const m = harness('?repository=1', 'scan');
+  link = new URL(m.run('membersPageLink({id:7})'), 'https://local/dashboard/');
+  assert.equal(link.searchParams.get('repository'), '7');
+  assert.equal(link.searchParams.get('return'), 'scan.html?repository=7');
+});
+
+test('Monitoring restores the returned repository only when it appears in the allowed list', async () => {
+  const h = monitoringHarness();
+  h.run('location.search="?repository=7";fetchJson=async()=>({repositories:[{id:1,name:"first"},{id:7,name:"returned"}]});');
+  await h.run('loadRepositorySelect()');
+  assert.equal(h.node('repository-select').value, '7');
+  h.node('repository-select').value = '';
+  h.run('location.search="?repository=99";');
+  await h.run('loadRepositorySelect()');
+  assert.equal(h.node('repository-select').value, '');
+  assert.equal(h.node('scan-results').innerHTML, '');
+});
+
+test('Members Back rejects unsafe destinations and Breadcrumb escapes repository names', () => {
+  const h = harness('?repository=1&return=scan.html%3Frepository%3D1','members');
+  h.run('renderMemberNavigation({id:1,name:"<img onerror=bad>"});');
+  assert.equal(h.node('member-back-link').href, 'scan.html?repository=1');
+  assert.equal(h.node('member-origin-tag').textContent, 'From Repository Monitoring');
+  assert.ok(h.node('member-breadcrumbs').innerHTML.includes('Repository Monitoring'));
+  assert.ok(h.node('member-breadcrumbs').innerHTML.includes('&lt;img'));
+  assert.ok(!h.node('member-breadcrumbs').innerHTML.includes('<img'));
+  for (const destination of ['https://evil.test/dashboard/scan.html','//evil.test/dashboard/','javascript:alert(1)','users.html','../api/users']) {
+    h.context.destination = destination;
+    assert.equal(h.run('memberReturnInfo(destination).href'), 'index.html');
+  }
+  assert.equal(h.run('memberReturnInfo("history.html?repository=1&scan=2&q=test").href'), 'history.html?repository=1&q=test');
+  h.run('location.search="?repository=1";renderMemberNavigation();');
+  assert.equal(h.node('member-origin-tag').textContent, 'Direct link');
+  assert.equal(h.node('member-back-link').textContent, 'Back to Dashboard');
+  assert.ok(!h.node('member-breadcrumbs').innerHTML.includes('&lt;img'));
+});
 
 test('user controls retain role and disable actions, add reset and prevent self deletion', async () => {
   const h = usersHarness();
@@ -500,4 +632,110 @@ test('resetting own password redirects to Login and clears browser identity', as
   assert.equal(h.run('state.user'), null);
   assert.equal(h.run('state.csrf'), null);
   assert.equal(h.node('reset-password').value, '');
+});
+
+
+test('repository controls respect global Role without exposing member lists to Viewer',()=>{
+  const h=harness();
+  assert.ok(h.run('repositoryAccessActions({id:1,name:"repo"})').includes('Leave repository'));
+  assert.ok(!h.run('repositoryAccessActions({id:1})').includes('>Members<'));
+  h.run('state.user.role="operator"');
+  assert.ok(h.run('repositoryAccessActions({id:1})').includes('>Members<'));
+  h.run('state.user.role="superuser"');
+  assert.ok(!h.run('repositoryAccessActions({id:1})').includes('Leave repository'));
+});
+
+test('Audit describes policy and repository membership separately from account changes',()=>{
+  const h=harness('','users');
+  assert.equal(h.run('auditChanges({action:"repository.member_left",before:{repository_id:3}})'),'Member left: Repository #3');
+  const text=h.run('auditChanges({action:"policy.updated",before:{minimum_score:60},after:{minimum_score:80,version:"v2"}})');
+  assert.ok(text.includes('60 -> 80') && text.includes('v2'));
+});
+
+test('Policy publication states distinguish local save, pending merge, publication and observed Runner version',()=>{
+  const h=harness('','policy');
+  assert.ok(h.run('policyActivationText({central_file_minimum:60,settings:{}})').includes('Not published'));
+  for(const [activation,text] of Object.entries({awaiting_merge:'unchanged until',published_awaiting_report:'awaiting an imported',observed_in_report:'observed in an imported',publish_failed:'Publication failed'})) {
+    h.context.activation=activation;
+    assert.ok(h.run('policyActivationText({settings:{activation}})').includes(text));
+  }
+  h.run('state.user.role="viewer"');
+  assert.ok(!h.run('policyPublicationControls({updated_at:"now"})').includes('publish-policy-button'));
+  h.run('state.user.role="superuser"');
+  assert.ok(h.run('policyPublicationControls({updated_at:"now"})').includes('publish-policy-button'));
+  const html=h.run('policyPublicationControls({publication:{pr_url:"javascript:alert(1)",error:"<img onerror=bad>"}})');
+  assert.ok(!html.includes('href="javascript:'));
+  assert.ok(!html.includes('<img'));
+  assert.ok(html.includes('&lt;img'));
+});
+
+test('Publish uses the saved version, confirms GitHub writes, prevents duplicates and remains admin-only',async()=>{
+  const h=harness('','policy');
+  h.context.calls=[];let resolve;
+  h.context.pending=new Promise(done=>{resolve=done;});
+  let confirmed=false;let prompt='';
+  h.context.window.confirm=text=>{prompt=text;return confirmed;};
+  h.run('state.user.role="superuser";policyVersion="saved-version";policySavedMinimum=90;fetchJson=async(url,options)=>{calls.push({url,...options});return pending;};loadPolicy=async()=>{};setMessage=(id,text)=>{el(id).textContent=text;};');
+  await h.run('publishPolicy()');
+  assert.equal(h.context.calls.length,0);
+  assert.ok(prompt.includes('90/100') && prompt.includes('pull request'));
+  confirmed=true;
+  const first=h.run('publishPolicy()');
+  await h.run('publishPolicy()');
+  assert.equal(h.context.calls.length,1);
+  assert.equal(h.context.calls[0].url,'/api/policy/publish');
+  assert.deepEqual(JSON.parse(h.context.calls[0].body),{version:'saved-version'});
+  resolve({});await first;
+  h.run('state.user.role="operator"');
+  await h.run('publishPolicy(true)');
+  assert.equal(h.context.calls.length,1);
+});
+
+test('Findings paginate and combine file and severity filters without changing the gate',()=>{
+  const h=harness('?scan=2','scan-detail');
+  h.run('state.selectedDetail={scan:{id:2,status:"BLOCK"},findings:Array.from({length:45},(_,i)=>({severity:i<40?"HIGH":"LOW",scanner:"Bandit",file:"src/app.py",line:i+1}))};state.detailPage=2;renderDetailFindings()');
+  assert.equal((h.node('detail-findings-list').innerHTML.match(/data-finding-key=/g)||[]).length,20);
+  assert.ok(h.node('detail-findings-list').innerHTML.includes('Page 2 of 3'));
+  h.run('state.detailFilters.severity="LOW";state.detailFilters.file="APP.PY";state.detailPage=1;renderDetailFindings()');
+  assert.equal(h.node('detail-visible-count').textContent,'5 of 45 findings');
+  h.run('state.detailFilters.file="not-present";renderDetailFindings()');
+  assert.ok(h.node('detail-findings-list').innerHTML.includes('No matching findings'));
+  assert.equal(h.run('state.selectedDetail.scan.status'),'BLOCK');
+});
+
+test('revoked access clears an already-open detail on its next refresh',async()=>{
+  const h=harness('?scan=2','scan-detail');
+  h.run('fetchJson=async url=>url.endsWith("/findings")?{findings:[]}:{scan:state.scans.get("2")}');
+  await h.run('loadScanDetail()');
+  assert.ok(h.node('history-detail').innerHTML.includes('test'));
+  h.run('fetchJson=async()=>{throw new ApiError("Resource not found",404)}');
+  await h.run('loadScanDetail({background:true})');
+  assert.equal(h.run('state.selectedDetail'),null);
+  assert.equal(h.node('history-scope').innerHTML,'');
+  assert.ok(!h.node('history-detail').innerHTML.includes('Security gate blocked'));
+});
+
+test('completed Run link requests findings from its resolved scan without changing attempts',async()=>{
+  const h=harness('?scan=run-1-10-1','scan-detail');h.context.calls=[];
+  h.run('fetchJson=async url=>{calls.push(url);return url.endsWith("/findings")?{findings:[]}:{scan:{id:25,repository_id:1,status:"BLOCK",github:{run_id:10,run_attempt:1,branch:"main"}}}}');
+  await h.run('loadScanDetail()');
+  assert.equal(h.context.calls[0],'/api/scans/run-1-10-1');
+  assert.equal(h.context.calls[1],'/api/scans/25/findings');
+  assert.equal(h.run('state.selectedDetail.scan.github.run_id'),10);
+});
+
+test('Leave requires confirmation, prevents duplicate requests and clears repository caches',async()=>{
+  const h=harness('','dashboard');
+  h.context.button={disabled:false,dataset:{name:'repo'}};
+  h.context.window.confirm=()=>false;
+  h.run('globalThis.calls=[];fetchJson=async(...args)=>{calls.push(args)}');
+  await h.run('leaveRepository("1",button)');assert.equal(h.run('calls.length'),0);
+  h.context.window.confirm=()=>true;
+  h.run('fetchJson=(...args)=>new Promise(resolve=>{calls.push(args);globalThis.finish=resolve});loadDashboard=async()=>{};state.monitoringRepositories.set("1",{});state.selectedDetail={scan:{id:1}}');
+  const first=h.run('leaveRepository("1",button)');
+  await h.run('leaveRepository("1",button)');assert.equal(h.run('calls.length'),1);
+  h.run('finish({})');await first;
+  assert.equal(h.run('state.selectedDetail'),null);
+  assert.equal(h.run('state.monitoringRepositories.size'),0);
+  assert.equal(h.context.button.disabled,false);
 });

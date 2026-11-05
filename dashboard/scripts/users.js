@@ -12,117 +12,174 @@ async function loadUsers() {
   await Promise.all([loadUserList(), loadAudit()]);
 }
 
+const userAccessFilters = { search: "", role: "" };
+let userListLoading = false;
+let userListError = null;
+
+function filterUsers(users) {
+  const query = userAccessFilters.search.trim().toLowerCase();
+  return users.filter(
+    (user) =>
+      (!query || String(user.username).toLowerCase().includes(query)) &&
+      (!userAccessFilters.role || user.role === userAccessFilters.role),
+  );
+}
+
 async function loadUserList() {
   const container = el("users-container");
+  userListLoading = true;
+  userListError = null;
   container.innerHTML = '<div class="loading">Loading users...</div>';
+  el("user-access-count").textContent = "Loading users...";
   try {
     const users = requireArray(await fetchJson(API.users), "users");
     state.users = new Map(users.map((user) => [String(user.id), user]));
-    container.innerHTML = users.length
-      ? [
-          '<div class="table-wrapper">',
-          '<table class="user-table">',
-          "<thead>",
-          "<tr>",
-          '<th scope="col">User',
-          "</th>",
-          '<th scope="col">Role',
-          "</th>",
-          '<th scope="col">Status',
-          "</th>",
-          '<th scope="col">Created',
-          "</th>",
-          '<th scope="col">Access controls',
-          "</th>",
-          "</tr>",
-          "</thead>",
-          "<tbody>",
-          templateText(
-            users
-              .map((user) =>
-                [
-                  "<tr>",
-                  "<td>",
-                  "<strong>",
-                  templateText(escapeHtml(user.username)),
-                  "</strong>",
-                  templateText(
-                    user.id === state.user.id
-                      ? '<span class="you-label">You</span>'
-                      : "",
-                  ),
-                  "</td>",
-                  "<td>",
-                  templateText(escapeHtml(ROLE_NAMES[user.role] || user.role)),
-                  "</td>",
-                  "<td>",
-                  '<span class="status-badge ',
-                  templateText(user.is_active ? "allow" : "unknown"),
-                  '">',
-                  templateText(user.is_active ? "Active" : "Disabled"),
-                  "</span>",
-                  "</td>",
-                  "<td>",
-                  templateText(escapeHtml(formatDate(user.created_at))),
-                  "</td>",
-                  "<td>",
-                  '<div class="user-access-controls">',
-                  '<select id="user-role-',
-                  templateText(escapeHtml(user.id)),
-                  '" aria-label="Role for ',
-                  templateText(escapeHtml(user.username)),
-                  '">',
-                  templateText(
-                    Object.entries(ROLE_NAMES)
-                      .map(
-                        ([role, label]) =>
-                          `<option value="${role}" ${role === user.role ? "selected" : ""}>${label}</option>`,
-                      )
-                      .join(""),
-                  ),
-                  "</select>",
-                  '<button type="button" class="small-button" data-action="save-user-role" data-id="',
-                  templateText(escapeHtml(user.id)),
-                  '" aria-label="Save role for ',
-                  templateText(escapeHtml(user.username)),
-                  '">Save role',
-                  "</button>",
-                  '<button type="button" class="',
-                  templateText(
-                    user.is_active ? "danger-button" : "small-button",
-                  ),
-                  '" data-action="toggle-user" data-id="',
-                  templateText(escapeHtml(user.id)),
-                  '" aria-label="',
-                  templateText(user.is_active ? "Disable" : "Enable"),
-                  " ",
-                  templateText(escapeHtml(user.username)),
-                  '">',
-                  templateText(user.is_active ? "Disable" : "Enable"),
-                  "</button>",
-                  `<button type="button" class="small-button" data-action="reset-user-password" data-id="${escapeHtml(user.id)}" aria-label="Reset password for ${escapeHtml(user.username)}">Reset password</button>`,
-                  `<button type="button" class="danger-button" data-action="delete-user" data-id="${escapeHtml(user.id)}" aria-label="Delete ${escapeHtml(user.username)}" ${user.id === state.user.id ? 'disabled title="You cannot delete your own account"' : ""}>Delete</button>`,
-                  "</div>",
-                  "</td>",
-                  "</tr>",
-                ].join(""),
-              )
-              .join(""),
-          ),
-          "</tbody>",
-          "</table>",
-          "</div>",
-        ].join("")
+  } catch (error) {
+    state.users.clear();
+    userListError = error;
+  } finally {
+    userListLoading = false;
+    renderUserList();
+  }
+}
+
+function renderUserList() {
+  const container = el("users-container");
+  if (userListError) {
+    container.innerHTML = errorBox(userListError, "reload-users");
+    el("user-access-count").textContent = "User list unavailable";
+    return;
+  }
+  const allUsers = [...state.users.values()];
+  const users = filterUsers(allUsers);
+  el("user-access-count").textContent =
+    `${users.length} of ${allUsers.length} users`;
+  container.innerHTML = users.length
+    ? [
+        '<div class="table-wrapper">',
+        '<table class="user-table">',
+        "<thead>",
+        "<tr>",
+        '<th scope="col">User',
+        "</th>",
+        '<th scope="col">Role',
+        "</th>",
+        '<th scope="col">Status',
+        "</th>",
+        '<th scope="col">Created',
+        "</th>",
+        '<th scope="col">Access controls',
+        "</th>",
+        "</tr>",
+        "</thead>",
+        "<tbody>",
+        templateText(
+          users
+            .map((user) =>
+              [
+                "<tr>",
+                "<td>",
+                "<strong>",
+                templateText(escapeHtml(user.username)),
+                "</strong>",
+                templateText(
+                  user.id === state.user.id
+                    ? '<span class="you-label">You</span>'
+                    : "",
+                ),
+                "</td>",
+                "<td>",
+                templateText(escapeHtml(ROLE_NAMES[user.role] || user.role)),
+                "</td>",
+                "<td>",
+                '<span class="status-badge ',
+                templateText(user.is_active ? "allow" : "unknown"),
+                '">',
+                templateText(user.is_active ? "Active" : "Disabled"),
+                "</span>",
+                "</td>",
+                "<td>",
+                templateText(escapeHtml(formatDate(user.created_at))),
+                "</td>",
+                "<td>",
+                '<div class="user-access-controls">',
+                '<select id="user-role-',
+                templateText(escapeHtml(user.id)),
+                '" aria-label="Role for ',
+                templateText(escapeHtml(user.username)),
+                '">',
+                templateText(
+                  Object.entries(ROLE_NAMES)
+                    .map(
+                      ([role, label]) =>
+                        `<option value="${role}" ${role === user.role ? "selected" : ""}>${label}</option>`,
+                    )
+                    .join(""),
+                ),
+                "</select>",
+                '<button type="button" class="small-button" data-action="save-user-role" data-id="',
+                templateText(escapeHtml(user.id)),
+                '" aria-label="Save role for ',
+                templateText(escapeHtml(user.username)),
+                '">Save role',
+                "</button>",
+                '<button type="button" class="',
+                templateText(user.is_active ? "danger-button" : "small-button"),
+                '" data-action="toggle-user" data-id="',
+                templateText(escapeHtml(user.id)),
+                '" aria-label="',
+                templateText(user.is_active ? "Disable" : "Enable"),
+                " ",
+                templateText(escapeHtml(user.username)),
+                '">',
+                templateText(user.is_active ? "Disable" : "Enable"),
+                "</button>",
+                `<button type="button" class="small-button" data-action="reset-user-password" data-id="${escapeHtml(user.id)}" aria-label="Reset password for ${escapeHtml(user.username)}">Reset password</button>`,
+                `<button type="button" class="danger-button" data-action="delete-user" data-id="${escapeHtml(user.id)}" aria-label="Delete ${escapeHtml(user.username)}" ${user.id === state.user.id ? 'disabled title="You cannot delete your own account"' : ""}>Delete</button>`,
+                "</div>",
+                "</td>",
+                "</tr>",
+              ].join(""),
+            )
+            .join(""),
+        ),
+        "</tbody>",
+        "</table>",
+        "</div>",
+      ].join("")
+    : allUsers.length
+      ? emptyState(
+          "No matching users",
+          "Try a different username or role filter.",
+        )
       : emptyState(
           "No users available",
           "Create a user to grant access to this workspace.",
         );
-  } catch (error) {
-    container.innerHTML = errorBox(error, "reload-users");
-  }
 }
 
 function auditChanges(event) {
+  if (event.action === "policy.updated")
+    return `Minimum score: ${event.before?.minimum_score ?? "?"} -> ${event.after?.minimum_score ?? "?"}; version ${event.after?.version || "?"}`;
+  if (event.action?.startsWith("policy."))
+    return `${event.action.replaceAll("_", " ")}: ${event.after?.state || event.after?.operation || ""}; version ${event.after?.version || "?"}`;
+  if (event.action?.startsWith("repository.")) {
+    const label =
+      {
+        "repository.created": "Repository created",
+        "repository.deleted": "Repository deleted",
+        "repository.member_added": "Member added",
+        "repository.member_removed": "Member removed",
+        "repository.member_left": "Member left",
+      }[event.action] || event.action;
+    return `${label}: Repository #${event.after?.repository_id ?? event.before?.repository_id ?? "?"}`;
+  }
+  if (event.action === "owner_settings.updated") {
+    const fields = Object.keys(event.after || {}).filter(
+      (key) => event.before?.[key] !== event.after[key],
+    );
+    return `Owner Settings updated: ${fields.join(", ") || "connection verified"}`;
+  }
   if (event.action === "user.deleted") return "Account deleted";
   if (event.action === "user.password_reset")
     return "Password reset; sessions revoked";
@@ -330,6 +387,14 @@ async function deleteUser(id, button) {
 }
 
 function initializeUserManagement() {
+  el("user-access-search").addEventListener("input", (event) => {
+    userAccessFilters.search = event.target.value;
+    if (!userListLoading) renderUserList();
+  });
+  el("user-access-role").addEventListener("change", (event) => {
+    userAccessFilters.role = event.target.value;
+    if (!userListLoading) renderUserList();
+  });
   el("reset-password-form").addEventListener("submit", submitPasswordReset);
   el("reset-password-dialog").addEventListener("cancel", (event) => {
     event.preventDefault();

@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Repository members / DevSecOps</title>
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/layout.css" />
+    <link rel="stylesheet" href="css/components.css" />
+    <link rel="stylesheet" href="css/members.css" />
+    <script src="scripts/common.js" defer></script>
+    <script src="scripts/members.js" defer></script>
+  </head>
+  <body data-page="members">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <div id="auth-check" class="auth-check" role="status">
+      Checking your session...
+    </div>
+    <div class="app" id="protected-app" hidden>
+      <div id="navigation-shell"></div>
+      <main class="main" id="main-content" tabindex="-1">
+        <header class="topbar">
+          <div class="page-title">
+            <button
+              type="button"
+              class="mobile-menu icon-button"
+              id="menu-toggle"
+              aria-label="Open navigation"
+              aria-controls="sidebar"
+              aria-expanded="false"
+            >
+              <svg
+                width="19"
+                height="19"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <div class="page-heading">
+              <span
+                class="page-heading-icon"
+                data-ui-icon="user"
+                aria-hidden="true"
+              ></span>
+              <div class="page-heading-copy">
+                <h1 class="page-heading-title">Repository members</h1>
+                <p class="page-description">
+                  Manage membership and access to this repository.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="account-controls">
+            <div
+              class="account-avatar"
+              id="user-avatar"
+              aria-hidden="true"
+            ></div>
+            <div class="account-details">
+              <strong id="current-username"></strong
+              ><span id="current-role"></span>
+            </div>
+            <button
+              type="button"
+              class="secondary-button compact"
+              id="logout-button"
+            >
+              Log out
+            </button>
+          </div>
+        </header>
+        <div
+          id="global-message"
+          class="message-region"
+          aria-live="polite"
+        ></div>
+        <div class="member-navigation">
+          <nav
+            id="member-breadcrumbs"
+            class="breadcrumbs"
+            aria-label="Breadcrumb"
+          ></nav>
+          <div class="member-navigation-actions">
+            <span id="member-origin-tag" class="status-badge unknown"
+              >Direct link</span
+            >
+            <a
+              id="member-back-link"
+              class="secondary-button compact"
+              href="index.html"
+              >Back to Dashboard</a
+            >
+          </div>
+        </div>
+        <section class="content-section">
+          <div class="member-heading">
+            <div>
+              <h2 id="member-repository-name">Loading repository...</h2>
+              <p>
+                Repository membership controls access to branches, history and
+                findings.
+              </p>
+            </div>
+            <div id="member-repository-actions" class="actions"></div>
+          </div>
+          <div id="member-forms" hidden>
+            <form id="member-search-form" class="member-grid">
+              <label
+                >Find an existing user<input
+                  id="member-search"
+                  type="search"
+                  maxlength="64"
+                  placeholder="Search username" /></label
+              ><button type="submit" class="secondary-button">
+                Search users
+              </button>
+            </form>
+            <form id="add-member-form" class="member-grid">
+              <label
+                >Add member<select id="member-candidate" required>
+                  <option value="">Select a user</option>
+                </select></label
+              ><button
+                id="add-member-button"
+                type="submit"
+                class="primary-button"
+              >
+                Add member
+              </button>
+            </form>
+          </div>
+          <div
+            id="member-message"
+            class="message-region"
+            aria-live="polite"
+          ></div>
+          <div id="members-list" aria-live="polite"></div>
+          <p class="muted">
+            Super Users have administrator access and are not listed as members.
+            Only a Super User can remove an Operator. Removing membership does
+            not delete the account.
+          </p>
+        </section>
+        <footer class="main-footer">
+          <span>DevSecOps Security Platform</span
+          ><span>Central security / Clear decisions</span>
+        </footer>
+      </main>
+    </div>
+  </body>
+</html>

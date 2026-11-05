@@ -4,17 +4,20 @@ import os
 import threading
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict
 from repository import github_monitor
 from repository.github_client import configured as github_configured
 from scanner.repository_scanner import validate_repository
 
 from api.auth_routes import router as auth_router
+from api.owner_settings_routes import router as owner_settings_router
+from api.member_routes import router as member_router
+from repository import membership
 from auth.settings import Settings
 from auth.web import AuthenticationMiddleware
 
@@ -33,6 +36,7 @@ from security.parser import (
 from security.policy import (
     evaluate_policy,
     load_policy_config,
+    load_local_policy,
 )
 
 from security.scoring import (
@@ -80,7 +84,29 @@ app = FastAPI(
 
 app.state.auth_settings = auth_settings
 app.include_router(auth_router)
+app.include_router(owner_settings_router)
+app.include_router(member_router)
 app.add_middleware(AuthenticationMiddleware)
+
+
+@app.exception_handler(membership.NotFound)
+async def missing_resource(request, error):
+    return JSONResponse(status_code=404, content={"detail": str(error)})
+
+
+@app.exception_handler(membership.Conflict)
+async def conflicting_resource(request, error):
+    return JSONResponse(status_code=409, content={"detail": str(error)})
+
+
+@app.exception_handler(PermissionError)
+async def denied_resource(request, error):
+    return JSONResponse(status_code=403, content={"detail": "Insufficient permissions"})
+
+
+@app.exception_handler(ValueError)
+async def invalid_resource(request, error):
+    return JSONResponse(status_code=400, content={"detail": str(error)})
 
 
 @app.exception_handler(RequestValidationError)
@@ -145,6 +171,11 @@ app.mount(
 repository_manager = RepositoryManager()
 
 
+def visible_repositories(request):
+    allowed = membership.visible_ids(request.state.user["id"])
+    return [r for r in repository_manager.get_repositories() if r["id"] in allowed]
+
+
 # =========================================================
 # REQUEST MODEL
 # =========================================================
@@ -178,10 +209,17 @@ def health_check():
 
 @app.get("/api/policy")
 def get_security_policy():
-    config = load_policy_config()
+    from repository import policy_settings
+    try:
+        config = load_local_policy()
+        settings = policy_settings.status()
+    except (OSError, RuntimeError, ValueError) as error:
+        raise HTTPException(status_code=503, detail="Security policy configuration is unavailable") from error
     if not isinstance(config, dict):
         raise HTTPException(status_code=503, detail="Security policy configuration is invalid")
     policy = config.get("policy", {})
+    baseline_minimum = policy["minimum_score"]
+    policy["minimum_score"] = settings["minimum_score"]
     severity = config.get("severity", {})
     if not isinstance(policy, dict) or not isinstance(severity, dict):
         raise HTTPException(status_code=503, detail="Security policy configuration is invalid")
@@ -199,7 +237,55 @@ def get_security_policy():
         "severity": severity,
         "severity_penalties": dict(SEVERITY_PENALTY),
         "grade_bands": grade_bands,
+        "settings": settings,
+        "central_file_minimum": baseline_minimum,
     }
+
+
+class PolicyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    minimum_score: int = Field(ge=0, le=100, strict=True)
+
+
+@app.patch("/api/policy")
+def update_security_policy(payload: PolicyRequest, request: Request):
+    from repository import policy_settings
+    policy_settings.save(payload.minimum_score, request.state.user["id"])
+    return get_security_policy()
+
+
+class PolicyPublicationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    version: str = Field(min_length=1, max_length=100)
+
+
+@app.post("/api/policy/publish")
+def publish_security_policy(payload: PolicyPublicationRequest, request: Request):
+    from repository import policy_publisher
+    try:
+        policy_publisher.publish(payload.version, request.state.user["id"])
+        return get_security_policy()
+    except policy_publisher.PublicationError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@app.post("/api/policy/publication/check")
+def check_policy_publication(payload: PolicyPublicationRequest, request: Request):
+    from repository import policy_publisher
+    try:
+        policy_publisher.check(payload.version, request.state.user["id"])
+        return get_security_policy()
+    except policy_publisher.PublicationError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@app.get("/policy/v1")
+def public_policy():
+    from repository import policy_settings
+    try:
+        return JSONResponse(policy_settings.publication(), headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail="Policy publication unavailable") from error
 
 
 # =========================================================
@@ -209,17 +295,12 @@ def get_security_policy():
 @app.post("/api/repositories")
 def add_repository(
     request: RepositoryRequest,
+    http_request: Request,
 ):
 
     try:
 
-        validate_repository(request.repo_url.strip())
-        repository = (
-            repository_manager
-            .add_repository(
-                request.repo_url
-            )
-        )
+        repository = membership.enroll(request.repo_url, http_request.state.user["id"])
 
         return {
             "status": "success",
@@ -239,12 +320,9 @@ def add_repository(
 # =========================================================
 
 @app.get("/api/repositories")
-def get_repositories():
+def get_repositories(request: Request):
 
-    repositories = (
-        repository_manager
-        .get_repositories()
-    )
+    repositories = visible_repositories(request)
 
     return {
         "repositories": [dict(repository, tracking=github_monitor.tracking(repository["id"])) for repository in repositories],
@@ -291,14 +369,11 @@ def get_repository(
 )
 def delete_repository(
     repository_id: int,
+    request: Request,
 ):
 
-    deleted = (
-        repository_manager
-        .delete_repository(
-            repository_id
-        )
-    )
+    membership.delete_repository(request.state.user["id"], repository_id)
+    deleted = True
 
     if not deleted:
 
@@ -485,6 +560,7 @@ def execute_repository_scan(
                 status=status,
                 reason=reason,
                 findings=findings,
+                policy=policy_result.get("policy"),
             )
         )
 
@@ -633,11 +709,14 @@ def execute_repository_scan(
 )
 def scan_repository(
     repository_id: int,
+    request: Request,
 ):
 
-    return execute_repository_scan(
+    result = execute_repository_scan(
         repository_id
     )
+    membership.check(request.state.user["id"], repository_id, manage=True)
+    return result
 
 
 # =========================================================
@@ -647,12 +726,9 @@ def scan_repository(
 @app.post(
     "/api/repositories/scan-all"
 )
-def scan_all_repositories():
+def scan_all_repositories(request: Request):
 
-    repositories = (
-        repository_manager
-        .get_repositories()
-    )
+    repositories = visible_repositories(request)
 
 
     if not repositories:
@@ -679,11 +755,14 @@ def scan_all_repositories():
 
         try:
 
+            membership.check(request.state.user["id"], repository_id, manage=True)
+
             scan_result = (
                 execute_repository_scan(
                     repository_id
                 )
             )
+            membership.check(request.state.user["id"], repository_id, manage=True)
 
 
             results.append({
@@ -702,6 +781,9 @@ def scan_all_repositories():
 
             })
 
+
+        except (membership.NotFound, PermissionError):
+            continue
 
         except Exception as error:
 
@@ -742,7 +824,7 @@ def scan_all_repositories():
             "completed",
 
         "total":
-            len(repositories),
+            len(results),
 
         "successful":
             successful,
@@ -810,21 +892,23 @@ def get_repository_history(
 # =========================================================
 
 @app.get("/api/scans")
-def get_all_scans():
+def get_all_scans(request: Request):
 
     scans = (
         repository_manager
         .get_all_scans()
     )
 
-    attempts = github_monitor.run_history()
+    allowed = membership.visible_ids(request.state.user["id"])
+    scans = [scan for scan in scans if scan["repository_id"] in allowed]
+    attempts = [row for row in github_monitor.run_history() if row["repository_id"] in allowed]
     invalidated = {(row["repository_id"], row["github"].get("run_id"), row["github"].get("run_attempt")) for row in attempts}
     records = []
     for scan in scans:
         metadata = github_monitor.scan_metadata(scan["id"])
         if metadata and (scan["repository_id"], metadata.get("run_id"), metadata.get("run_attempt")) in invalidated:
             continue
-        records.append(dict(scan, github=metadata))
+        records.append(dict(scan, github=metadata, policy=(metadata or {}).get("policy") or repository_manager.get_scan_policy(scan["id"])))
     records.extend(attempts)
     records.sort(key=lambda record: record.get("scanned_at") or "", reverse=True)
 
@@ -842,6 +926,27 @@ def get_all_scans():
 # =========================================================
 # SCAN FINDINGS
 # =========================================================
+
+@app.get("/api/scans/{record_id}")
+def get_scan_record(record_id: str, request: Request):
+    if record_id.isdigit():
+        record = repository_manager.get_scan(membership.parse_id(record_id))
+    else:
+        parts = record_id.split("-")
+        row = github_monitor.run_record(*(membership.parse_id(part) for part in parts[1:])) if len(parts)==4 and parts[0]=="run" else None
+        record = (repository_manager.get_scan(row["scan_id"]) if row["scan_id"] is not None else github_monitor.error_record(row)) if row else None
+    if record is None:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    membership.check(request.state.user["id"], record["repository_id"])
+    if record.get("report_available") is not False:
+        metadata = github_monitor.scan_metadata(record["id"])
+        row = github_monitor.run_record(record["repository_id"], metadata["run_id"], metadata.get("run_attempt", 1)) if metadata and metadata.get("run_id") else None
+        if row is not None and row["scan_id"] is None:
+            record = dict(github_monitor.error_record(row), id=record["id"])
+        else:
+            record.update(github=metadata, policy=(metadata or {}).get("policy") or repository_manager.get_scan_policy(record["id"]))
+    return {"scan": record}
+
 
 @app.get(
     "/api/scans/{scan_id}/findings"
@@ -882,27 +987,36 @@ class GitHubSyncRequest(BaseModel):
 
 @app.get("/api/github/status")
 def github_status():
-    return {"configured": github_configured(), "authentication": "github_app"}
+    from repository.owner_settings import current, FIELDS
+    return {"configured": github_configured(), "authentication": "github_app",
+            "owner": current()[FIELDS["owner"]]}
 
 
 @app.post("/api/repositories/{repository_id}/sync")
-def sync_github_repository(repository_id: int, request: GitHubSyncRequest | None = None):
+def sync_github_repository(repository_id: int, http_request: Request, request: GitHubSyncRequest | None = None):
     if repository_manager.get_repository(repository_id) is None:
         raise HTTPException(status_code=404, detail="Repository not found")
     try:
         if request and request.branch:
-            return github_monitor.sync_repository(repository_manager, repository_id, request.branch)
-        return github_monitor.sync_all_branches(repository_manager, repository_id)
+            result = github_monitor.sync_repository(repository_manager, repository_id, request.branch)
+        else:
+            result = github_monitor.sync_all_branches(repository_manager, repository_id)
+        membership.check(http_request.state.user["id"], repository_id, manage=True)
+        return result
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 
 @app.post("/api/github/sync")
-def sync_github_repositories():
+def sync_github_repositories(request: Request):
     results = []
-    for repository in repository_manager.get_repositories():
+    for repository in visible_repositories(request):
         try:
+            membership.check(request.state.user["id"], repository["id"], manage=True)
             result = github_monitor.sync_all_branches(repository_manager, repository["id"])
+            membership.check(request.state.user["id"], repository["id"], manage=True)
+        except (membership.NotFound, PermissionError):
+            continue
         except Exception:
             result = {"execution_status": "error", "policy_status": None, "message": "Repository synchronization failed"}
         results.append({"repository_name": repository["name"], **result})
@@ -912,16 +1026,14 @@ def sync_github_repositories():
 @app.post("/scan")
 def legacy_scan(
     request: RepositoryRequest,
+    http_request: Request,
 ):
 
-    repository = (
-        repository_manager
-        .add_repository(
-            request.repo_url
-        )
-    )
+    repository = membership.enroll(request.repo_url, http_request.state.user["id"])
 
 
-    return execute_repository_scan(
+    result = execute_repository_scan(
         repository["id"]
     )
+    membership.check(http_request.state.user["id"], repository["id"], manage=True)
+    return result

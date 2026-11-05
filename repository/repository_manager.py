@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from pathlib import Path
+import json
 
 from repository.database import (
     get_connection,
@@ -250,6 +251,7 @@ class RepositoryManager:
         reason: str,
         findings: list,
         connection=None,
+        policy=None,
     ):
 
         owns_connection = connection is None
@@ -284,6 +286,8 @@ class RepositoryManager:
 
 
             scan_id = cursor.lastrowid
+            if policy is not None:
+                connection.execute("INSERT INTO scan_policy VALUES (?,?)", (scan_id, json.dumps(policy)))
 
 
             for finding in findings:
@@ -492,6 +496,23 @@ class RepositoryManager:
     # =====================================================
     # ALL SCANS
     # =====================================================
+
+    def get_scan_policy(self, scan_id):
+        connection = get_connection()
+        try:
+            row = connection.execute("SELECT data FROM scan_policy WHERE scan_id=?", (scan_id,)).fetchone()
+            return json.loads(row["data"]) if row else None
+        finally:
+            connection.close()
+
+    def get_scan(self, scan_id):
+        connection = get_connection()
+        try:
+            row = connection.execute("""SELECT s.*, r.name AS repository_name, r.url AS repository_url
+                FROM scans s JOIN repositories r ON r.id=s.repository_id WHERE s.id=?""", (scan_id,)).fetchone()
+            return dict(row) if row else None
+        finally:
+            connection.close()
 
     def get_all_scans(self):
 

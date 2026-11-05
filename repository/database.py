@@ -102,6 +102,31 @@ def initialize_database():
                 repository_id INTEGER PRIMARY KEY REFERENCES repositories(id) ON DELETE CASCADE,
                 data TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS repository_members (
+                repository_id INTEGER NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                joined_at TEXT NOT NULL,
+                added_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                PRIMARY KEY (repository_id, user_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_repository_members_user ON repository_members(user_id);
+            CREATE TABLE IF NOT EXISTS owner_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                data TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS policy_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                data TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS policy_publications (
+                version TEXT PRIMARY KEY,
+                data TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS scan_policy (
+                scan_id INTEGER PRIMARY KEY REFERENCES scans(id) ON DELETE CASCADE,
+                data TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS github_imports (
                 repository_id INTEGER NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
                 run_id INTEGER NOT NULL,

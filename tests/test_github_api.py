@@ -45,7 +45,7 @@ def test_unconfigured_api_exposes_no_credentials(scan_environment, scan_client, 
     monkeypatch.setattr(github_client, "ENV_PATH", github_client.ENV_PATH.parent / "missing-test-settings.env")
     for key in ("APP_ID", "INSTALLATION_ID", "PRIVATE_KEY_PATH"):
         monkeypatch.delenv("DEVSECOPS_GITHUB_" + key, raising=False)
-    assert scan_client.get("/api/github/status").json() == {"configured": False, "authentication": "github_app"}
+    assert scan_client.get("/api/github/status").json() == {"configured": False, "authentication": "github_app", "owner": "TRM-MYOS"}
     response = scan_client.post("/api/github/sync")
     assert response.status_code == 200
     assert all(item["execution_status"] == "error" and item["policy_status"] is None for item in response.json()["results"])

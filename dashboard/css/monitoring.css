@@ -172,9 +172,12 @@ body[data-page="scan"] {
 }
 
 .monitoring-repository-heading .repo-identity {
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  flex: 0 1 auto;
   gap: 10px;
   min-width: 0;
+  max-width: 100%;
 }
 
 .monitoring-repository-heading h3 {
@@ -193,15 +196,59 @@ body[data-page="scan"] {
   white-space: nowrap;
 }
 
-.monitoring-repository-heading .text-link {
-  display: inline-flex;
+.monitoring-repository-actions {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 7px;
+  gap: 10px;
+  margin-left: auto;
 }
 
-.monitoring-repository-heading .text-link .ui-icon {
-  width: 16px;
-  height: 16px;
+.monitoring-repository-actions .secondary-button {
+  min-height: 40px;
+  padding: 9px 14px;
+  color: var(--blue);
+  font-size: 12px;
+}
+
+.monitoring-repository-access {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid var(--line);
+  margin-top: 22px;
+  padding-top: 20px;
+}
+
+.monitoring-repository-access > div {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.monitoring-repository-access h4 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+.monitoring-repository-access p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.monitoring-leave-button {
+  min-height: 40px;
+  padding: 9px 14px;
+  font-size: 12px;
+}
+
+.monitoring-repository-actions .ui-icon,
+.monitoring-leave-button .ui-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }
 
 .monitoring-branches {
@@ -485,6 +532,37 @@ body[data-page="scan"] {
 }
 
 @media (max-width: 650px) {
+  .monitoring-repository-heading .repo-identity {
+    flex-basis: 100%;
+    grid-template-columns: 28px minmax(0, 1fr);
+  }
+
+  .monitoring-repository-heading .monitoring-branch-total {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .monitoring-repository-actions {
+    width: 100%;
+  }
+
+  .monitoring-repository-actions .secondary-button {
+    flex: 1;
+  }
+
+  .monitoring-repository-access {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .monitoring-repository-access > div {
+    flex-basis: auto;
+  }
+
+  .monitoring-leave-button {
+    width: 100%;
+  }
+
   .monitoring-card.content-section {
     padding: 18px;
   }

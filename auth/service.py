@@ -159,6 +159,8 @@ def update_user(user_id: int, changes: dict, actor_id: int | None = None) -> dic
             "UPDATE users SET role = ?, is_active = ?, updated_at = ? WHERE id = ?",
             (role, int(is_active), _timestamp(), user_id),
         )
+        if role == "superuser":
+            connection.execute("DELETE FROM repository_members WHERE user_id=?", (user_id,))
         connection.execute("DELETE FROM auth_sessions WHERE user_id = ?", (user_id,))
         updated = connection.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         _audit(connection, actor_id, updated, "user.updated", before, after)

@@ -35,6 +35,9 @@ def auth_environment(tmp_path, monkeypatch):
     repository = api.repository_manager.add_repository(
         "https://github.com/TRM-MYOS/test-auth-repository"
     )
+    from repository.membership import change
+    for role in ("operator", "viewer"):
+        change(users["superuser"]["id"], repository["id"], users[role]["id"])
     scan_id = api.repository_manager.save_scan(
         repository_id=repository["id"],
         scanned_at="2026-10-13T00:00:00+00:00",
@@ -542,7 +545,7 @@ def test_split_frontend_assets_load_before_login_without_exposing_pages_or_apis(
         for file in (dashboard / folder).iterdir()
         if file.suffix in {".js", ".css"}
     )
-    assert len(assets) == 16
+    assert len(assets) == 23
     with TestClient(auth_environment["api"].app) as anonymous:
         for asset in assets:
             response = anonymous.get(asset, follow_redirects=False)

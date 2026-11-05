@@ -75,3 +75,19 @@ def test_untrusted_download_redirect_is_rejected(client):
     client.client = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(302, headers={"location": "http://localhost/private"})))
     with pytest.raises(GitHubError, match="Untrusted"):
         client.artifact("TRM-MYOS/example", 1)
+
+
+def test_invalid_installation_id_returns_safe_error_before_network(client):
+    client, _ = client
+    client.settings["DEVSECOPS_GITHUB_INSTALLATION_ID"] = "invalid"
+    with pytest.raises(GitHubError, match="installation ID"):
+        client._token()
+
+
+def test_invalid_token_response_is_not_cached(client):
+    client, _ = client
+    client.client = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(201, json={"token": 123})))
+    for _ in range(2):
+        with pytest.raises(GitHubError, match="authentication response"):
+            client._token()
+        assert client.token is None

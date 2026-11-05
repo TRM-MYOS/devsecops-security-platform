@@ -4,6 +4,38 @@
   min-width: 780px;
 }
 
+.user-access-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.user-access-filters label {
+  margin: 0;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.user-access-filters label[for="user-access-role"] {
+  flex: 0 1 220px;
+}
+.user-access-filters input,
+.user-access-filters select {
+  margin-top: 7px;
+}
+#user-access-count {
+  padding-bottom: 12px;
+}
+@media (max-width: 550px) {
+  .user-access-filters label,
+  .user-access-filters label[for="user-access-role"] {
+    flex: 1 1 100%;
+  }
+  #user-access-count {
+    padding: 0;
+  }
+}
+
 .audit-table {
   min-width: 700px;
 }

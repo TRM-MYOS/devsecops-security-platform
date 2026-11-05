@@ -1,0 +1,52 @@
+.member-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+  margin: 18px 0;
+}
+.member-grid > label {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.member-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.member-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.member-navigation .breadcrumbs {
+  margin: 0;
+  min-width: 0;
+}
+.member-navigation .breadcrumbs a,
+.member-navigation .breadcrumbs > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.member-navigation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.member-navigation-actions .status-badge {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 550px) {
+  .member-navigation-actions {
+    width: 100%;
+  }
+}
