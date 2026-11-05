@@ -1,6 +1,6 @@
 policy:
-  minimum_score: 60
-
+  minimum_score: 90
+  version: 4c700f46-c4df-41b6-8b47-6b6ecc69414b
 severity:
   critical: BLOCK
   high: BLOCK
