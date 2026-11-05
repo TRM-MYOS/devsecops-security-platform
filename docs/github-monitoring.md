@@ -49,7 +49,7 @@ API endpoints remain available for compatibility. Scanner, score and policy rule
    or broaden scanner triggers. Pull-request merge commits are not imported as push results.
 
 The backend polls all tracked repositories and branches on startup and approximately
-30 seconds after each polling cycle, even when the browser is closed. Keep the backend
+10 seconds after each polling cycle, even when the browser is closed. Keep the backend
 running. Use one Uvicorn worker to avoid duplicate pollers. Set process environment
 `DEVSECOPS_GITHUB_POLL_ENABLED=false` to disable background polling if needed.
 Visible Dashboard, Monitoring and History pages reload stored data every 5 seconds;

@@ -77,7 +77,7 @@ def sync_all_branches(manager, repository_id, client=None):
                 client.close()
 
 
-def poll_repositories(manager, stop, interval=30):
+def poll_repositories(manager, stop, interval=10):
     """Backend polling continues even when no browser is open."""
     from repository.github_client import configured
     while not stop.is_set():
