@@ -1,82 +1,56 @@
-# เปลี่ยนเกณฑ์จาก Dashboard โดยไม่เปิด Backend ออกอินเทอร์เน็ต
+# Apply เกณฑ์คะแนนจาก Dashboard เข้า Central โดยตรง
 
-## การทำงาน
+1. Super User เปิด Security Policy กรอก Minimum passing score จำนวนเต็ม 0–100 แล้วกด **Apply policy** และยืนยัน
+2. ระบบบันทึก Version และเกณฑ์ใน SQLite แล้วใช้ GitHub App ส่ง Commit เปลี่ยนเฉพาะ `security-policy.yaml` บน Central `main` โดยตรง **ไม่สร้าง Branch หรือ PR และไม่ Merge PR ให้**
+3. ระบบอ่าน Version และ Minimum score กลับจาก Central ก่อนแสดง Published / Awaiting report
+4. งานสแกนรอบใหม่ที่โหลด Central รุ่นนี้ใช้เกณฑ์ใหม่ งานที่เริ่มไปแล้วอาจใช้ checkout เดิม ต้องตรวจ Policy version ของแต่ละ Run
+5. เมื่อ Sync รายงานที่ยืนยันแหล่งที่มาแล้วและ Version/เกณฑ์ตรงกัน จะแสดง Observed in report ซึ่งยืนยันรายงานนั้น ไม่ได้รับรองว่าทุก Run ใช้เวอร์ชันเดียวกัน
 
-1. Super User กรอก Minimum passing score 0–100 แล้วกด **Save threshold** เพื่อบันทึกเวอร์ชันที่ต้องการลง SQLite
-2. กด **Publish to Central** และยืนยัน ระบบใช้ GitHub App เชื่อมออกไป GitHub สร้าง Branch `dashboard-policy/<version>` และ Pull Request ที่เปลี่ยนเฉพาะ `security-policy.yaml`
-3. ผู้มีสิทธิ์ใน Central ตรวจและ Merge PR ตามกฎเดิม ระบบไม่ Merge เองและไม่ข้าม Branch protection
-4. กด **Check GitHub status** ระบบตรวจไฟล์บน Central `main` ว่า Minimum score และ Version ตรงกันจริง ก่อนแสดง Published
-5. Push โค้ดใหม่ใน Target ให้ Gate ทำงานด้วย Central รุ่นนั้น แล้ว Sync ผลเข้า Dashboard เมื่อรายงานมี Version และเกณฑ์ตรงกันจะแสดง Observed in report
+Backend เชื่อมออก GitHub เท่านั้น ไม่ต้องเปิดรับ Connection จากอินเทอร์เน็ต Runner ไม่ต้องติดต่อ SQLite หรือเครื่อง Dashboard ไม่ต้องใช้ PAT หรือสร้าง Policy signing key สำหรับวิธีนี้
 
-Backend ไม่ต้องเปิดรับ Connection จากอินเทอร์เน็ต และ Runner ไม่ต้องติดต่อ SQLite หรือเครื่อง Dashboard โดยตรง GitHub App private key ไม่ใช่ Policy signing key; วิธีนี้ไม่ต้องสร้าง Policy signing key เพิ่มหรือใช้ PAT
+## ตั้งค่าครั้งแรก
 
-การ Save อย่างเดียวไม่เปลี่ยน Gate บน GitHub และ PR ที่ยังไม่ Merge ยังไม่มีผลต่อเกณฑ์ใหม่ งานที่เริ่มไปแล้วอาจใช้ Central checkout รุ่นก่อนหน้า ให้ตรวจ Policy version ในรายงานของแต่ละ Run
+- เผยแพร่โค้ด Central ที่รองรับ Policy version และรายงานก่อน ปุ่ม Apply ไม่เผยแพร่ Python หรือ Workflow ให้
+- App/Installation จาก Owner Settings ต้องเข้าถึง `TRM-MYOS/devsecops-security-platform` พร้อม **Contents: Read and write** ส่วน Monitoring ยังคงใช้ Actions/Contents/Metadata read
+- Publisher ขอ Token แยก จำกัด Repository เฉพาะ Central และขอ Contents write เท่านั้น ไม่ขอ Pull requests, Workflows หรือ Administration write
+- กฎของ Central `main` ต้องอนุญาต App เขียนตรง หากบังคับ PR หรือปฏิเสธการเขียน ระบบแจ้งข้อผิดพลาด ไม่ปรับกฎ ไม่ใช้ Force และไม่ข้าม Protection
+- คง Required Check และกฎป้องกัน Merge ของ Repository เป้าหมายตามเดิม
+- หากมี `security-policy-source.json` บน Backend หรือ Central ต้องตรวจทานแหล่ง Policy ก่อน ระบบปฏิเสธ Repository apply เมื่อมี HTTPS source เพื่อไม่อ้างว่า YAML มีผลทั้งที่ Runner อ่านแหล่งอื่น
 
-## เปิดใช้ครั้งแรก
+GitHub Contents token ไม่จำกัดเป็นรายไฟล์ การจำกัด Path อยู่ใน Backend ด้วย จึงต้องเก็บ App key ให้ปลอดภัย ผู้เรียก API เลือก Repository/Branch/Path เองไม่ได้ Trusted Central ยังถูกกำหนดในโค้ด ไม่เปลี่ยนตาม Target Owner อัตโนมัติ
 
-### 1. เผยแพร่โค้ด Central ที่รองรับฟังก์ชันนี้
-
-ผู้ดูแลต้องตรวจ Diff, Tests และเผยแพร่โค้ดชุดนี้ตามกระบวนการของ Central ก่อน โดยเฉพาะ Backend/Frontend, Schema migration, `repository/policy_publisher.py`, `security/policy.py` และ Parser ที่บันทึก Policy snapshot
-
-การเผยแพร่โค้ดครั้งแรกเป็นขั้นตอนแยกจากปุ่ม Publish ซึ่งปุ่มนี้เขียนได้เฉพาะไฟล์ Policy ไม่เผยแพร่ Python หรือ Workflow ให้ และไม่เปลี่ยน `uses: ...@main` ให้เอง
-
-หากใช้วิธีเก็บ Policy ใน Central ไม่ต้องสร้าง `security-policy-source.json` สำหรับ HTTPS หากมีไฟล์นั้นอยู่แล้วบน Backend หรือ Central ต้องตรวจทานและเลิกใช้ผ่านกระบวนการที่อนุมัติก่อน ระบบจะปฏิเสธการเผยแพร่แบบ Repository เพื่อป้องกันการอ้างว่าใช้ YAML ทั้งที่ Runner อ่าน HTTPS อยู่
-
-### 2. ตั้ง GitHub App ด้วยผู้ดูแล
-
-App/Installation ที่ Backend ใช้อยู่ต้องเข้าถึง `TRM-MYOS/devsecops-security-platform` และมี Repository permissions:
-
-| Permission | สิทธิ์ |
-|---|---|
-| Metadata | Read-only |
-| Actions | Read-only สำหรับ Monitoring เดิม |
-| Contents | Read and write สำหรับเผยแพร่ Policy |
-| Pull requests | Read and write สำหรับสร้าง PR |
-
-ผู้ดูแล App ต้อง Save การเปลี่ยนสิทธิ์และอนุมัติ Permission ใหม่ที่ Installation หาก GitHub ร้องขอ ไม่ต้องให้ Workflows write, Administration write หรือสิทธิ์ Bypass กฎ Merge
-
-Token ของ Monitoring ยังขอเฉพาะ read ตามเดิม ส่วน Publisher สร้าง Installation token แยกที่ขอ Contents/Pull requests write และจำกัด Repository เฉพาะ Central โค้ด Publisher กำหนด Repository, Branch `main` และ Path ที่เขียนไว้ฝั่ง Backend ผู้เรียก API เปลี่ยนปลายทางเองไม่ได้
-
-GitHub ไม่ได้จำกัด Contents token ให้เขียนได้เพียงไฟล์เดียว ข้อจำกัดไฟล์อยู่ในโค้ดนี้ด้วย จึงต้องเก็บ App key ให้ปลอดภัยและใช้สิทธิ์ Installation เท่าที่จำเป็น หากองค์กรต้องแยก App สำหรับเผยแพร่ออกจาก App สำหรับอ่านผล ต้องเพิ่มการตั้งค่า Credentials แยกก่อน; รุ่นนี้ใช้ Credentials จาก Owner Settings เดิม
-
-Owner Settings ของ Target ไม่เปลี่ยน Trusted Central ให้เอง หากย้าย Target ไป Owner อื่น Installation ใหม่ยังต้องเข้าถึง Central ได้ด้วย มิฉะนั้นการ Publish จะล้มเหลวอย่างชัดเจน
-
-### 3. ทดสอบใช้งาน
-
-- Login ด้วย Super User → Security Policy → Save threshold → Publish to Central
-- ตรวจ PR ว่าเปลี่ยนเฉพาะ Minimum score และ Policy version ใน `security-policy.yaml`; HIGH/CRITICAL ยังเป็น BLOCK
-- Merge ด้วยบัญชีที่กฎ Central อนุญาต แล้ว Check GitHub status
-- รัน Target ใหม่และตรวจ Run/attempt, Commit, Score, Gate, Policy version และ Minimum score ให้ตรงกับ Artifact/Dashboard
-- ตรวจ PR ที่ BLOCK ว่า GitHub ปิดกั้น Merge จริง ข้อความ BLOCK บน Dashboard อย่างเดียวไม่ใช่หลักฐานการปิดกั้น Merge
-
-ก่อนเปลี่ยนเกณฑ์ซ้ำ ให้ตรวจและปิด PR เวอร์ชันเก่าที่ไม่ต้องการ อย่า Merge PR เก่าหลังอนุมัติเวอร์ชันใหม่ การ Save เวอร์ชันใหม่ไม่ลบหรือปิด PR เก่าอัตโนมัติ
-
-## ความหมายของสถานะ
+## สถานะและการกู้คืน
 
 | สถานะ | ความหมาย |
 |---|---|
-| Not published | ค่าอยู่ใน SQLite เท่านั้น |
-| Pull request created / Awaiting merge | สร้าง PR แล้ว แต่ Central `main` ยังไม่ใช้เกณฑ์นั้น |
-| Published / Awaiting report | ตรวจพบ Version และ Minimum score บน Central `main`; ยังรอรายงาน Runner ที่ยืนยันเวอร์ชัน |
-| Observed in report | เคยนำเข้ารายงานที่ตรวจสอบแล้วและใช้ Version/Minimum score ตรงกัน ไม่ได้ยืนยันว่าทุก Run ใช้เวอร์ชันเดียวกัน |
-| Publication failed | สิทธิ์ไม่พอ เครือข่ายล้มเหลว Conflict หรือไฟล์ผิด ไม่ถือว่าเกณฑ์ใหม่มีผล |
-| Closed / Superseded | PR ถูกปิด หรือ Central เปลี่ยนไปใช้เวอร์ชันอื่น ให้ Save และเผยแพร่เวอร์ชันใหม่เมื่อจำเป็น |
+| Not applied | ค่ามีเฉพาะในเครื่องหรือยังไม่เคยส่ง ต้อง Apply |
+| Published / Awaiting report | อ่านพบเกณฑ์และ Version บน Central ณ การตรวจล่าสุด รอรายงานใหม่ |
+| Observed in report | เคยนำเข้ารายงานที่ใช้เกณฑ์และ Version นี้ ผลเก่ายังคง Policy เดิม |
+| Publication failed | ยังไม่ยืนยัน Apply ตรวจสิทธิ์ เครือข่าย และ Conflict แล้ว Check GitHub status หรือ Retry apply เวอร์ชันเดิม |
+| Superseded | Central เปลี่ยนไปใช้ Policy อื่น ต้องตรวจทานและ Save/Apply เวอร์ชันใหม่หากต้องการ |
+| Legacy PR pending | PR รุ่นเก่ายังอยู่ ปิด PR ที่ไม่ต้องการด้วยตัวเอง อย่า Merge เกณฑ์เก่าหลัง Apply ใหม่ |
 
-หาก Request หมดเวลาหลัง GitHub สร้าง Branch/Commit/PR ไปแล้ว ให้ Retry **เวอร์ชันเดิม** หรือ Check status ก่อน ระบบค้นหา Branch/PR จาก Version เพื่อกู้สถานะโดยไม่สร้าง PR ซ้ำตามปกติ หากมีผู้แก้ Branch หรือ `main` เปลี่ยนระหว่างดำเนินการ ระบบไม่เขียนทับให้เอง ต้องตรวจและ Save เวอร์ชันใหม่
+ถ้าถูกปฏิเสธก่อนเขียน Policy เดิมจะยังอยู่ แต่ **Timeout อาจเกิดหลัง GitHub รับ Commit แล้ว** อย่าถือว่าความล้มเหลวทุกกรณีหมายถึง Central ไม่เปลี่ยน ให้ Check หรือ Retry เวอร์ชันเดิม ระบบอ่าน Version กลับเพื่อกู้สถานะและไม่ส่ง Commit ซ้ำเมื่อค่าตรงแล้ว
 
-## สิทธิ์และผลสแกน
+ระบบตรวจ Head ก่อนเขียน และส่ง SHA ของไฟล์เดิมให้ Contents API เพื่อไม่เขียนทับ Policy ที่แก้พร้อมกัน ถ้า Head เปลี่ยนระหว่างเตรียมจะหยุดให้ตรวจทาน หากมี Commit เกิดในช่วงหลังตรวจ Head GitHub จะอัปเดตเฉพาะไฟล์ Policy และรักษาไฟล์อื่น โดย SHA ของ Policy ยังต้องตรง การเขียน GitHub กับ SQLite ไม่ใช่ธุรกรรมเดียวกัน จึงต้องยืนยันผลและกู้คืนด้วย Version
 
-- Save, Publish และ Check publication เป็น Super User เท่านั้น มี Session, CSRF และตรวจสิทธิ์ซ้ำก่อนเขียน GitHub
-- Operator/Viewer อ่านค่าและสถานะได้ แต่เรียก API เขียนไม่ได้
-- Minimum score เปลี่ยนได้อย่างเดียว สูตร Score/Grade และกติกา HIGH/CRITICAL BLOCK คงเดิม
-- เพิ่ม `policy.version` ใน YAML และเก็บ Version/Minimum score ในผลสแกนแต่ละรอบ ไม่แก้ผลเก่าย้อนหลัง
-- ถ้า YAML ผิดรูปแบบ Runner ล้มเหลวแบบ Fail-Closed ไม่ใช้ค่า default จนเกิด ALLOW ปลอม
-- ข้อผิดพลาดระหว่าง Publish ไม่เปลี่ยน Central `main`; Gate ยังใช้ Policy ที่อนุมัติและเผยแพร่ไว้ก่อนหน้า
-- SQLite เพิ่มตาราง `policy_publications` แบบ Additive เก็บ Version, Branch, PR, Commit และสถานะ ไม่มี Token หรือเนื้อหา Private Key
-- การเปลี่ยนสถานะและการเขียน GitHub บันทึกใน Audit เดิม
+ข้อมูล PR รุ่นเก่าใน SQLite ยังคงอยู่เพื่อ Audit/ลิงก์ ไม่สร้างหรือลบ PR ให้อัตโนมัติ **ปิด PR เก่าที่ไม่ต้องการก่อนใช้ Apply โดยตรง** เพื่อป้องกันการ Merge เกณฑ์เก่ากลับมาภายหลัง
 
-API ใหม่: `POST /api/policy/publish` และ `POST /api/policy/publication/check` รับเฉพาะ `{ "version": "UUID จากการ Save" }` ไม่รับ Repository, Branch, Path, Token หรือค่าคะแนนใหม่ผ่านคำสั่ง Publish
+## สิทธิ์และ API
 
-การทดสอบอัตโนมัติใช้ GitHub API จำลองและฐานข้อมูลแยก ไม่ใช่การเผยแพร่หรือ Merge บน GitHub จริง รายงานการส่งงานต้องระบุแยกจากการทดสอบใช้งานจริงเสมอ
+- Apply, Retry และ Check เฉพาะ Super User ตรวจ Session/CSRF และตรวจสิทธิ์กับ Version ซ้ำก่อนเขียน GitHub
+- Operator/Viewer อ่านได้ ไม่สามารถเรียก API เปลี่ยนค่า
+- HIGH/CRITICAL ยัง BLOCK สูตร Score/Grade และผลสแกนเก่าไม่เปลี่ยน YAML ที่เสียยัง Fail-Closed
+- ใช้ตาราง `policy_publications` เดิม เก็บ Version, เกณฑ์, Method, Commit, สถานะ และ Audit ไม่เก็บ Token หรือเนื้อหา Private Key ไม่ต้องล้างฐานข้อมูล
+- `PATCH /api/policy` ยังคงบันทึก Version ในเครื่องเท่านั้น
+- `POST /api/policy/publish` รับเฉพาะ Version ที่บันทึกแล้ว ส่งตรงเข้า Central; `POST /api/policy/publication/check` ตรวจโดยไม่เขียนไฟล์
+- หน้าเว็บ Apply เรียก Save และ Publish ตามลำดับหลังยืนยันครั้งเดียว ถ้าส่งไม่สำเร็จจะระบุว่าบันทึกเฉพาะในเครื่อง ไม่ถือว่าเปิดใช้
+- Signed HTTPS ที่ตั้งไว้ยังรองรับ ปุ่มระบุ Save signed policy และไม่ส่ง Commit เข้า Central
 
-อ้างอิง: [GitHub App installation tokens และการจำกัด Repository/Permissions](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app), [API สำหรับเปลี่ยนไฟล์ Repository](https://docs.github.com/en/rest/repos/contents#create-or-update-file-contents)
+## ตรวจรับ
+
+Tests ใช้ GitHub API จำลอง ฐานข้อมูลและ Key แยก ครอบคลุมขอบเขต 0/100, Role/CSRF, กดซ้ำ, Conflict, ปฏิเสธการเขียน, Timeout หลังเขียนและ Retry, Version ในรายงาน และผลเก่าไม่เปลี่ยน ไม่ใช่หลักฐานการส่ง Policy จริง
+
+ทดสอบจริงแยก: ตรวจ Commit ว่าเปลี่ยนเฉพาะ Policy โดยไม่สร้าง PR → รัน Target ใหม่ → ตรวจ Version/Minimum score/Commit/Run ใน Artifact และ Dashboard → ตรวจ PR เป้าหมายว่า BLOCK ปิดกั้น Merge จริง
+
+อ้างอิง: [GitHub App installation tokens](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app), [Contents API](https://docs.github.com/en/rest/repos/contents#create-or-update-file-contents), [Branch protection](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)

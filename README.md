@@ -205,9 +205,9 @@ Login ด้วย **Super User** แล้วเปิดเมนู **Owner S
 
 ### เผยแพร่เกณฑ์คะแนนโดยไม่เปิด Backend ออกอินเทอร์เน็ต
 
-Super User ใช้ **Security Policy → Save threshold → Publish to Central** เพื่อสร้าง PR เปลี่ยนเฉพาะไฟล์ Policy ใน Central หลังผู้มีสิทธิ์ Review/Merge แล้วจึงกด **Check GitHub status** และตรวจ Version ในรายงาน Runner ใหม่ การ Save อย่างเดียวไม่เปลี่ยน Gate บน GitHub
+Super User ใช้ **Security Policy → Apply policy** และยืนยัน ระบบบันทึก Version ลง SQLite แล้วใช้ GitHub App สร้าง Commit เปลี่ยนเฉพาะ `security-policy.yaml` บน Central `main` โดยตรง **ไม่สร้าง PR** ระบบอ่านกลับจาก GitHub ก่อนแสดง Applied และยังต้องตรวจ Version ในรายงาน Runner รอบใหม่เพื่อยืนยันการใช้งานจริง หาก Apply ล้มเหลว ค่าที่บันทึกในเครื่องยังไม่ถือว่าเปิดใช้บน GitHub ให้ Check GitHub status หรือ Retry apply เวอร์ชันเดิมก่อน
 
-ครั้งแรกต้องเผยแพร่โค้ดที่รองรับฟังก์ชันนี้ และให้ GitHub App เข้าถึง Central พร้อม Contents/Pull requests write ตาม [คู่มือ Policy publication](docs/policy-publication.md) ระบบไม่ Merge เอง ไม่ใช้ PAT และไม่ต้องเปิด Dashboard/Backend รับ Connection จากอินเทอร์เน็ต
+ครั้งแรกต้องเผยแพร่โค้ดที่รองรับฟังก์ชันนี้ และให้ GitHub App เข้าถึง Central พร้อม Contents write และกฎ Branch ที่อนุญาตให้เขียนตรง ตาม [คู่มือ Policy publication](docs/policy-publication.md) ไม่ต้องใช้ Pull requests write สำหรับ Apply ไม่ข้ามกฎ Branch ไม่ใช้ PAT และไม่ต้องเปิด Dashboard/Backend รับ Connection จากอินเทอร์เน็ต
 
 ## 6. อ่านผล Score, ALLOW และ BLOCK
 

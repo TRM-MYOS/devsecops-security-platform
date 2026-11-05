@@ -77,8 +77,8 @@ def status():
     from repository.policy_publisher import read
     published = read(settings["version"])
     activation = "observed_in_report" if observed else "awaiting_runner_report" if configured else "setup_required"
-    if published and not observed:
-        activation = {"merged": "published_awaiting_report", "awaiting_merge": "awaiting_merge",
+    if published and (not observed or published["state"] in {"failed", "superseded"}):
+        activation = {"applied": "published_awaiting_report", "merged": "published_awaiting_report", "awaiting_merge": "awaiting_merge",
                       "failed": "publish_failed", "closed": "publication_closed",
                       "superseded": "publication_superseded"}.get(published["state"], "publishing")
     return {**settings, "source_configured": configured, "runner_observed": observed,

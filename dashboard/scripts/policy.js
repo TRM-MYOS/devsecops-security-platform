@@ -6,6 +6,7 @@
 let policyVersion = null;
 let policySavedMinimum = null;
 let policyPublicationBusy = false;
+let policyDelivery = "central-repository";
 
 function policyActivationText(data) {
   const settings = data.settings || {};
@@ -18,7 +19,7 @@ function policyActivationText(data) {
       published_awaiting_report:
         "Published in Central main at the last check; awaiting an imported Runner report with this version.",
       awaiting_merge:
-        "Pull request created. The current GitHub threshold stays unchanged until the Central pull request is merged.",
+        "A legacy pull request is pending. It has not applied this threshold. Apply directly below and close the old pull request manually.",
       publish_failed:
         "Publication failed. The saved threshold has not been confirmed in Central. Check the error and retry the same version.",
       publication_closed:
@@ -28,7 +29,7 @@ function policyActivationText(data) {
       publishing:
         "Publication is being prepared. Check GitHub status before retrying.",
     }[settings.activation] ||
-    `Not published to GitHub. Save a threshold, then publish it for Central review. Local file baseline: ${data.central_file_minimum}/100.`
+    `Not applied to GitHub. Apply a threshold to update Central main. Local file baseline: ${data.central_file_minimum}/100.`
   );
 }
 
@@ -40,9 +41,9 @@ function policyPublicationControls(settings) {
     /^https:\/\/github\.com\/TRM-MYOS\/devsecops-security-platform\/pull\/[1-9][0-9]*$/.test(
       pr,
     )
-      ? `<a class="secondary-button" href="${escapeHtml(pr)}" target="_blank" rel="noopener noreferrer">Review pull request ${uiIcon("external")}</a>`
+      ? `<a class="secondary-button" href="${escapeHtml(pr)}" target="_blank" rel="noopener noreferrer">Legacy pull request ${uiIcon("external")}</a>`
       : "";
-  return `<div class="policy-publication"><p>Publication sends only the policy file to Central through the GitHub App. The Backend does not need an inbound internet connection. Central review and merge rules still apply.</p>${publication?.updated_at ? `<p class="muted">Last publication update: ${escapeHtml(formatDate(publication.updated_at))}${publication.commit_sha ? ` · Central commit: <code>${escapeHtml(publication.commit_sha.slice(0, 12))}</code>` : ""}</p>` : ""}${publication?.error ? `<p class="message warning">${escapeHtml(publication.error)}</p>` : ""}<div class="actions">${link}${isSuperUser() && settings.delivery !== "signed-https" ? `<button id="publish-policy-button" type="button" class="secondary-button" ${!settings.updated_at || policyPublicationBusy || ["merged", "closed", "superseded"].includes(publication?.state) ? "disabled" : ""}>${publication?.state === "failed" ? "Retry publication" : "Publish to Central"}</button>${publication ? `<button id="check-policy-publication" type="button" class="secondary-button" ${policyPublicationBusy ? "disabled" : ""}>Check GitHub status</button>` : ""}` : ""}</div></div>`;
+  return `<div class="policy-publication"><p>Apply commits only the policy file directly to Central main through the GitHub App. It does not create a pull request or start a scan. New scans use the applied version; existing results stay unchanged. Branch rules are respected.</p>${publication?.updated_at ? `<p class="muted">Last publication update: ${escapeHtml(formatDate(publication.updated_at))}${publication.commit_sha ? ` · Central commit: <code>${escapeHtml(publication.commit_sha.slice(0, 12))}</code>` : ""}</p>` : ""}${publication?.error ? `<p class="message warning">${escapeHtml(publication.error)}</p>` : ""}${link ? `<p class="message warning">An older policy PR still exists. Close it manually if no longer needed; do not merge an obsolete threshold.</p>` : ""}<div class="actions">${link}${isSuperUser() && settings.delivery !== "signed-https" ? `<button id="publish-policy-button" type="button" class="secondary-button" ${!settings.updated_at || policyPublicationBusy || ["applied", "merged", "superseded"].includes(publication?.state) ? "disabled" : ""}>${publication?.state === "failed" ? "Retry apply" : "Apply saved threshold"}</button>${publication ? `<button id="check-policy-publication" type="button" class="secondary-button" ${policyPublicationBusy ? "disabled" : ""}>Check GitHub status</button>` : ""}` : ""}</div></div>`;
 }
 
 async function loadPolicy() {
@@ -210,10 +211,11 @@ async function loadPolicy() {
     const settings = data.settings || {};
     policyVersion = settings.version;
     policySavedMinimum = minimum;
+    policyDelivery = settings.delivery || "central-repository";
     const status = policyActivationText(data);
     container.insertAdjacentHTML(
       "afterbegin",
-      `<section class="content-section"><h2>Global passing threshold</h2><p class="message info">${escapeHtml(status)}</p><p class="muted">Version: <code>${escapeHtml(settings.version || "Legacy")}</code></p>${isSuperUser() ? `<form id="policy-settings-form" class="inline-form"><label>Minimum passing score<input id="policy-minimum" type="number" min="0" max="100" step="1" required value="${escapeHtml(minimum)}" /></label><button id="save-policy-button" type="submit" class="primary-button" ${policyPublicationBusy ? "disabled" : ""}>Save threshold</button></form>` : "<p>Only a Super User can change the passing threshold.</p>"}${policyPublicationControls(settings)}<div id="policy-message" class="message-region" aria-live="polite"></div></section>`,
+      `<section class="content-section"><h2>Global passing threshold</h2><p class="message info">${escapeHtml(status)}</p><p class="muted">Version: <code>${escapeHtml(settings.version || "Legacy")}</code></p>${isSuperUser() ? `<form id="policy-settings-form" class="inline-form"><label>Minimum passing score<input id="policy-minimum" type="number" min="0" max="100" step="1" required value="${escapeHtml(minimum)}" /></label><button id="save-policy-button" type="submit" class="primary-button" ${policyPublicationBusy ? "disabled" : ""}>${settings.delivery === "signed-https" ? "Save signed policy" : "Apply policy"}</button></form>` : "<p>Only a Super User can change the passing threshold.</p>"}${policyPublicationControls(settings)}<div id="policy-message" class="message-region" aria-live="polite"></div></section>`,
     );
     el("policy-settings-form")?.addEventListener("submit", savePolicy);
     el("publish-policy-button")?.addEventListener(
@@ -239,26 +241,40 @@ async function savePolicy(event) {
   if (!Number.isInteger(minimum) || minimum < 0 || minimum > 100) return;
   if (
     !window.confirm(
-      `Save a global passing score of ${minimum}/100? HIGH/CRITICAL still block. Historical results will not change.`,
+      policyDelivery === "signed-https"
+        ? `Save a signed passing score of ${minimum}/100? HIGH/CRITICAL and historical results stay unchanged.`
+        : `Apply a passing score of ${minimum}/100 directly to Central main? This creates a policy commit, not a pull request. New scans use this version. HIGH/CRITICAL and historical results stay unchanged.`,
     )
   )
     return;
-  button.disabled = true;
+  policyPublicationBusy = true;
+  ["save-policy-button", "publish-policy-button", "check-policy-publication"].forEach(id => {
+    if (el(id)) el(id).disabled = true;
+  });
+  let failure;
+  let saved = false;
   try {
-    await fetchJson("/api/policy", {
+    const data = await fetchJson("/api/policy", {
       method: "PATCH",
       body: JSON.stringify({ minimum_score: minimum }),
     });
-    await loadPolicy();
-    setMessage(
-      "policy-message",
-      "Threshold saved locally. Publish to Central and merge its pull request before expecting new GitHub Gate runs to use it.",
-      "success",
-    );
+    saved = true;
+    if (data.settings?.delivery !== "signed-https") {
+      if (!data.settings?.version) throw new ApiError("The saved Policy version is missing. Reload before applying.");
+      await fetchJson("/api/policy/publish", {
+        method: "POST", body: JSON.stringify({version: data.settings.version}),
+      });
+    }
   } catch (error) {
-    setMessage("policy-message", error.message, "error");
+    failure = error;
   } finally {
+    policyPublicationBusy = false;
     button.disabled = false;
+    await loadPolicy();
+    setMessage("policy-message", failure
+      ? `${saved ? "Threshold saved locally, but apply was not confirmed. " : ""}${failure.message}`
+      : "Policy saved. Check the activation status above; a Runner report is required to confirm use by a scan.",
+      failure ? "error" : "success");
   }
 }
 
@@ -267,7 +283,7 @@ async function publishPolicy(check = false) {
   if (
     !check &&
     !window.confirm(
-      `Publish the saved threshold of ${policySavedMinimum}/100 by creating a Central pull request? This writes a policy branch on GitHub. The threshold takes effect after Central review and merge; HIGH/CRITICAL and historical results stay unchanged.`,
+      `Apply the saved threshold of ${policySavedMinimum}/100 directly to Central main without a pull request? This creates a policy commit. New scans use this version; HIGH/CRITICAL and historical results stay unchanged.`,
     )
   )
     return;
@@ -299,7 +315,7 @@ async function publishPolicy(check = false) {
         ? error.message
         : check
           ? "Publication status refreshed."
-          : "Publication checked. Review the status and Central pull request above.",
+          : "Apply checked. Review the Central activation status above; new scans must confirm the Policy version.",
       error ? "error" : "success",
     );
   }

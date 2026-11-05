@@ -33,7 +33,7 @@ Findings กรองตาม Scanner, Severity และชื่อไฟล�
 
 ## Minimum passing score
 
-**แนวทางหลักสำหรับเครือข่ายองค์กร:** ใช้ [การเผยแพร่ Policy ผ่าน Central Pull Request](policy-publication.md) โดย Backend เชื่อมออก GitHub และไม่เปิดรับ Connection จากอินเทอร์เน็ต Save, Publish, Merge และ Observed in report เป็นคนละสถานะ ส่วน Signed HTTPS ด้านล่างยังเป็นทางเลือกสำหรับผู้ดูแลที่ตั้งใจใช้แหล่ง Policy ผ่านเครือข่ายนั้น
+**แนวทางหลักสำหรับเครือข่ายองค์กร:** ใช้ [Apply policy โดยตรงบน Central main](policy-publication.md) โดย Backend เชื่อมออก GitHub และไม่เปิดรับ Connection จากอินเทอร์เน็ต กด Apply ครั้งเดียวเพื่อบันทึก Version และส่ง Commit เฉพาะ Policy โดยไม่สร้าง PR ค่าที่บันทึกในเครื่อง, ค่าที่ตรวจพบบน Central และ Observed in report เป็นคนละสถานะ ส่วน Signed HTTPS ด้านล่างยังเป็นทางเลือกสำหรับผู้ดูแลที่ตั้งใจใช้แหล่ง Policy ผ่านเครือข่ายนั้น
 
 Super User แก้จำนวนเต็ม 0–100 ใน Security Policy ได้ ค่าเป็นเกณฑ์กลางทั้งระบบ ไม่ใช่การแก้คะแนนผลสแกน บันทึกเวอร์ชันใหม่และ Audit ใน SQLite การเปลี่ยนเกณฑ์ไม่แก้ประวัติย้อนหลัง สูตร Score/Grade และ HIGH/CRITICAL BLOCK คงเดิม
 

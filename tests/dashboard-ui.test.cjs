@@ -654,8 +654,8 @@ test('Audit describes policy and repository membership separately from account c
 
 test('Policy publication states distinguish local save, pending merge, publication and observed Runner version',()=>{
   const h=harness('','policy');
-  assert.ok(h.run('policyActivationText({central_file_minimum:60,settings:{}})').includes('Not published'));
-  for(const [activation,text] of Object.entries({awaiting_merge:'unchanged until',published_awaiting_report:'awaiting an imported',observed_in_report:'observed in an imported',publish_failed:'Publication failed'})) {
+  assert.ok(h.run('policyActivationText({central_file_minimum:60,settings:{}})').includes('Not applied'));
+  for(const [activation,text] of Object.entries({awaiting_merge:'legacy pull request',published_awaiting_report:'awaiting an imported',observed_in_report:'observed in an imported',publish_failed:'Publication failed'})) {
     h.context.activation=activation;
     assert.ok(h.run('policyActivationText({settings:{activation}})').includes(text));
   }
@@ -678,7 +678,7 @@ test('Publish uses the saved version, confirms GitHub writes, prevents duplicate
   h.run('state.user.role="superuser";policyVersion="saved-version";policySavedMinimum=90;fetchJson=async(url,options)=>{calls.push({url,...options});return pending;};loadPolicy=async()=>{};setMessage=(id,text)=>{el(id).textContent=text;};');
   await h.run('publishPolicy()');
   assert.equal(h.context.calls.length,0);
-  assert.ok(prompt.includes('90/100') && prompt.includes('pull request'));
+  assert.ok(prompt.includes('90/100') && prompt.includes('directly to Central main without a pull request'));
   confirmed=true;
   const first=h.run('publishPolicy()');
   await h.run('publishPolicy()');
@@ -689,6 +689,55 @@ test('Publish uses the saved version, confirms GitHub writes, prevents duplicate
   h.run('state.user.role="operator"');
   await h.run('publishPolicy(true)');
   assert.equal(h.context.calls.length,1);
+});
+
+test('Apply confirms once, saves and publishes the returned version, and prevents overlapping requests',async()=>{
+  const h=harness('','policy');let resolve;
+  h.context.calls=[];h.context.confirmations=[];
+  h.context.pending=new Promise(done=>{resolve=done;});
+  h.context.window.confirm=text=>{h.context.confirmations.push(text);return true;};
+  h.node('policy-minimum').value='95';h.node('save-policy-button').disabled=false;
+  h.run('state.user.role="superuser";loadPolicy=async()=>{};setMessage=(id,text)=>{el(id).textContent=text;};fetchJson=async(url,options)=>{calls.push({url,...options});return options.method==="PATCH"?{settings:{version:"new-saved-version",delivery:"central-repository"}}:pending;};');
+  const first=h.run('savePolicy({preventDefault(){}})');
+  await new Promise(done=>setImmediate(done));
+  await h.run('savePolicy({preventDefault(){}})');
+  assert.equal(h.context.calls.length,2);
+  assert.equal(h.context.confirmations.length,1);
+  assert.ok(h.context.confirmations[0].includes('95/100 directly to Central main'));
+  assert.equal(h.context.calls[0].url,'/api/policy');
+  assert.deepEqual(JSON.parse(h.context.calls[0].body),{minimum_score:95});
+  assert.equal(h.context.calls[1].url,'/api/policy/publish');
+  assert.deepEqual(JSON.parse(h.context.calls[1].body),{version:'new-saved-version'});
+  resolve({});await first;
+  assert.equal(h.run('policyPublicationBusy'),false);
+  assert.ok(h.node('policy-message').textContent.includes('Runner report'));
+});
+
+test('Apply cancellation, role checks and failed publication never claim activation',async()=>{
+  const h=harness('','policy');h.context.calls=[];
+  h.node('policy-minimum').value='90';h.node('save-policy-button').disabled=false;
+  h.context.window.confirm=()=>false;
+  h.run('state.user.role="superuser";loadPolicy=async()=>{};setMessage=(id,text)=>{el(id).textContent=text;};fetchJson=async(url,options)=>{calls.push({url,...options});if(options.method==="PATCH")return {settings:{version:"saved",delivery:"central-repository"}};throw new ApiError("Central rejected write",409);};');
+  await h.run('savePolicy({preventDefault(){}})');assert.equal(h.context.calls.length,0);
+  h.context.window.confirm=()=>true;
+  for(const role of ['viewer','operator']){
+    h.context.testRole=role;h.run('state.user.role=testRole');
+    await h.run('savePolicy({preventDefault(){}})');
+  }
+  assert.equal(h.context.calls.length,0);
+  h.run('state.user.role="superuser"');await h.run('savePolicy({preventDefault(){}})');
+  assert.equal(h.context.calls.length,2);
+  assert.ok(h.node('policy-message').textContent.includes('saved locally, but apply was not confirmed'));
+  assert.equal(h.run('policyPublicationBusy'),false);
+});
+
+test('Signed HTTPS policy save never sends a direct GitHub apply',async()=>{
+  const h=harness('','policy');h.context.calls=[];h.context.window.confirm=()=>true;
+  h.node('policy-minimum').value='80';h.node('save-policy-button').disabled=false;
+  h.run('state.user.role="superuser";policyDelivery="signed-https";loadPolicy=async()=>{};setMessage=()=>{};fetchJson=async(url,options)=>{calls.push({url,...options});return {settings:{version:"signed-version",delivery:"signed-https"}};};');
+  await h.run('savePolicy({preventDefault(){}})');
+  assert.equal(h.context.calls.length,1);
+  assert.equal(h.context.calls[0].method,'PATCH');
 });
 
 test('Findings paginate and combine file and severity filters without changing the gate',()=>{
