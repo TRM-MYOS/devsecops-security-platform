@@ -1,6 +1,6 @@
 policy:
-  minimum_score: 80
-  version: 3f1e8af7-4def-47b2-b564-dc63d3aa42eb
+  minimum_score: 60
+  version: 78ce47c1-393b-4727-a016-0a050f86dc15
 severity:
   critical: BLOCK
   high: BLOCK
