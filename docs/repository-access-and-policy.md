@@ -107,18 +107,19 @@ Policy ที่ Runner ใช้ถูกแนบใน `security-summary.json
 
 ## การเปิดใช้และตรวจยืนยันรอบสุดท้าย
 
-### สถานะที่ตรวจจาก GitHub วันที่ 5 พฤศจิกายน 2026
+### สถานะโค้ดล่าสุดและสิ่งที่ต้องยืนยันบน GitHub
 
-ข้อมูลส่วนนี้เป็นผลตรวจแบบอ่านอย่างเดียว ณ วันดังกล่าว ไม่ใช่สถานะที่อัปเดตอัตโนมัติ
+ข้อมูลสถานะที่เปลี่ยนตามการ Push ไม่ควรฝังเป็นผลตรวจถาวรในคู่มือ จึงอ้างอิงเฉพาะ commit ล่าสุดของเอกสารชุดนี้ และให้ตรวจสถานะ GitHub จริงก่อนใช้งานทุกครั้ง
 
-| รายการ | หลักฐานที่ตรวจได้ |
+| รายการ | สถานะล่าสุด/วิธีตรวจ |
 |---|---|
-| Central `main` | Commit `e163a99bd7444c6c975605d6b9b0028d6178cc59`; ยังเป็น Policy รุ่นอ่าน YAML และ Action ยังไม่ได้ติดตั้ง `cryptography` |
-| Central branch protection | Branch API รายงาน `protected: false`; ผู้ดูแลควรตรวจการป้องกัน Central ก่อนเปิดใช้เกณฑ์แบบออนไลน์ |
-| Target `Demo_Test` | มี `.github/workflows/security-gate-test.yml`; อย่าเปลี่ยนชื่อเป็น `security-gate.yml` โดยไม่ปรับ Owner Settings ให้ตรง |
-| Target Required Check | Branch API ของ `main` แสดง `Central Security Gate / Run Central Security Scan` ผูกกับ GitHub Actions และ enforcement `everyone` |
-| รายละเอียดกฎและ Bypass | Connector อ่าน endpoint branch protection ไม่ได้ (`403`); จึงยังไม่ยืนยันการตั้งค่า Bypass หรือกฎทั้งหมด |
-| ผลจริงที่มีอยู่ | [Run 39948672219](https://github.com/TRM-MYOS/Demo_Test/actions/runs/39948672219) สำเร็จ ใช้ Central commit ข้างต้น และมี Artifact `security-reports`; เป็นผลเดิมวันที่ 23 ตุลาคม 2026 ไม่ใช่การทดสอบ Signed Policy รุ่นใหม่ |
+| Central `main` | ตรวจ SHA ล่าสุดด้วย `git ls-remote origin refs/heads/main` หรือ `git rev-parse HEAD` หลัง Checkout |
+| Central Policy | `security-policy.yaml` ใน commit นี้กำหนด Minimum score `90` และ HIGH/CRITICAL เป็น `BLOCK` |
+| Central Action | `action.yml` ติดตั้ง `cryptography` และใช้ Scanner/Policy จาก Central checkout โดยไม่รับ Policy จาก Target input |
+| Target Workflow | ต้องมี `.github/workflows/security-gate-test.yml` หรือชื่อที่ตรงกับ Owner Settings ของ Dashboard |
+| Required Check | ต้องตรวจบน Pull Request ว่าชื่อ `Central Security Gate / Run Central Security Scan` ผ่านและผูกกับ Branch rule/Ruleset จริง |
+| Branch protection และ Bypass | ต้องตรวจใน Repository เป้าหมายและ Central โดยผู้ดูแล เพราะไม่สามารถยืนยันจากโค้ดในเครื่องแทนการตั้งค่าบน GitHub ได้ |
+| ผลการทดสอบในเครื่อง | Pytest `270 passed, 3 warnings`; Frontend `48 passed` ไม่ใช่หลักฐานแทนการทดสอบ GitHub Actions จริง |
 
 ### HTTPS ที่จำเป็น
 

@@ -2,6 +2,8 @@
 
 ระบบกลางสำหรับตรวจความปลอดภัยของ GitHub Repositories ด้วย **Bandit, Trivy และ Gitleaks** พร้อม Dashboard สำหรับดูผลของแต่ละ Repository, Branch และ Commit
 
+สถานะเอกสารล่าสุด: **22 พฤศจิกายน 2026** · ตรวจ SHA ของ `main` ด้วย `git rev-parse HEAD` · การทดสอบล่าสุดผ่าน Pytest **270 รายการ** และ Frontend **48 รายการ**
+
 ## 1. ระบบทำงานอย่างไร
 
 ```text
@@ -86,12 +88,12 @@ python -m auth.bootstrap --username admin
 
 ## 3. เชื่อม Repository กับ Central Security Platform
 
-แนะนำชื่อไฟล์ **`security-gate.yml`** สำหรับใช้งานจริง เพื่อสื่อว่าเป็น Workflow ตรวจ Security Gate และใช้ชื่อเดียวกันได้ทุก Repository
+ใช้ชื่อไฟล์ **`security-gate-test.yml`** ตามค่าเริ่มต้นของระบบและตัวอย่างที่ทดสอบแล้ว หรือใช้ชื่ออื่นได้หากตั้งค่าให้ตรงกันในหน้า Owner Settings
 
 ใน Repository ที่ต้องการสแกน เช่น `devsecops-security-test` ให้สร้างไฟล์:
 
 ```text
-.github/workflows/security-gate.yml
+.github/workflows/security-gate-test.yml
 ```
 
 ใส่ YAML นี้ **หากมี Workflow นี้อยู่แล้ว ไม่ต้องสร้างซ้ำ**:
@@ -118,7 +120,7 @@ jobs:
 
 Workflow นี้เรียก Central เมื่อ **Push ทุก Branch** หรือ **เปิด/อัปเดต Pull Request เข้า `main`** โดย Central ดูแลการติดตั้งเครื่องมือ สแกน และตัดสิน ALLOW/BLOCK ทั้งหมด
 
-ชื่อไฟล์ต้องตรงกับ **Workflow filename** ในหน้า **Owner Settings** ซึ่งใช้ร่วมกันทุก Repository หากยังไม่บันทึกผ่าน Dashboard ระบบอ่าน `DEVSECOPS_GITHUB_WORKFLOW` จาก Environment / `.env` และใช้ `security-gate-test.yml` เป็น Default เมื่อไม่ได้กำหนด หากจะเปลี่ยนชื่อเป็น `security-gate.yml` ให้เปลี่ยน Workflow ใน Repository ที่ติดตามให้ตรงกันก่อน การแก้ตัวอย่างใน README ไม่ได้เปลี่ยนไฟล์ที่ใช้งานจริงให้เอง
+ชื่อไฟล์ต้องตรงกับ **Workflow filename** ในหน้า **Owner Settings** ซึ่งใช้ร่วมกันทุก Repository หากยังไม่บันทึกผ่าน Dashboard ระบบอ่าน `DEVSECOPS_GITHUB_WORKFLOW` จาก Environment / `.env` และใช้ `security-gate-test.yml` เป็น Default เมื่อไม่ได้กำหนด หากเปลี่ยนชื่อ Workflow ให้เปลี่ยนค่าใน Owner Settings และไฟล์ของทุก Repository ที่ติดตามให้ตรงกัน การแก้ตัวอย่างใน README ไม่ได้เปลี่ยนไฟล์ที่ใช้งานจริงให้เอง
 
 สิ่งที่ต้องตั้งค่าให้ครบ:
 
@@ -143,7 +145,7 @@ Backend ใช้ GitHub App อ่านข้อมูล Repository, Workflow
 DEVSECOPS_GITHUB_APP_ID=YOUR_APP_ID
 DEVSECOPS_GITHUB_INSTALLATION_ID=YOUR_INSTALLATION_ID
 DEVSECOPS_GITHUB_PRIVATE_KEY_PATH="C:\secure\github-app.private-key.pem"
-DEVSECOPS_GITHUB_WORKFLOW=security-gate.yml
+DEVSECOPS_GITHUB_WORKFLOW=security-gate-test.yml
 ```
 
 5. หากตั้งผ่าน Dashboard ใช้ได้ในรอบ Sync ถัดไปโดยไม่ Restart หากตั้งผ่าน `.env` ก่อนบันทึกค่าในฐานข้อมูล ให้ Restart Backend แล้วเพิ่ม Repository ผ่าน Dashboard
@@ -285,7 +287,7 @@ Password เก็บเป็น Argon2id hash และ Session ID เก็�
 | `DEVSECOPS_LOGIN_MAX_ATTEMPTS` | `5` | จำนวนครั้งที่ลอง Login ได้ในช่วงเวลา |
 | `DEVSECOPS_LOGIN_WINDOW_SECONDS` | `900` | ช่วงจำกัด Login 15 นาที |
 | `DEVSECOPS_SCANNER_TIMEOUT_SECONDS` | `600` | Timeout ต่อ Scanner ใน Process ที่สแกนจริง |
-| `DEVSECOPS_GITHUB_WORKFLOW` | `security-gate-test.yml` | ค่าเริ่มต้นในโค้ดเดิม; ตั้งเป็น `security-gate.yml` เมื่อใช้ชื่อตามตัวอย่างนี้ครบทุก Repository |
+| `DEVSECOPS_GITHUB_WORKFLOW` | `security-gate-test.yml` | ชื่อไฟล์ Workflow ที่มีอยู่จริงในทุก Repository ที่ติดตาม |
 | `DEVSECOPS_GITHUB_OWNER` | `TRM-MYOS` | Owner เป้าหมายเมื่อยังไม่มีค่าที่บันทึกใน Owner Settings |
 | `DEVSECOPS_GITHUB_POLL_ENABLED` | `true` | เปิดการ Sync อัตโนมัติใน Backend |
 | `DEVSECOPS_POLICY_SIGNING_KEY_PATH` | ไม่กำหนด | Path ของ Ed25519 Private Key แยกสำหรับเผยแพร่ Policy; ไม่ใช้ GitHub App Key |
@@ -348,7 +350,7 @@ API ที่เปลี่ยนข้อมูลต้องส่ง Cookie
 | `.env.example` / `.env` | Template / การตั้งค่าเฉพาะเครื่อง โดย `.env` ถูก Ignore |
 | `devsecops.db`, `backups/` | ฐานข้อมูลเริ่มต้นและ Backup เฉพาะเครื่อง ถูก Ignore |
 | `reports/` | รายงานที่สร้างจากการสแกน ถูก Ignore |
-| `.venv/`, `.pytest_cache/`, `__pycache__/` | Environment และ Cache ที่สร้างระหว่างใช้งาน |
+| `.venv/`, `.pytest_cache/`, `.pytest-*/`, `__pycache__/` | Environment และ Cache ที่สร้างระหว่างใช้งาน ไม่ต้อง Commit |
 
 ## 10. ทดสอบและแก้ปัญหาเบื้องต้น
 
@@ -364,6 +366,8 @@ node --test tests/dashboard-ui.test.cjs
 ```
 
 Tests ใช้ฐานข้อมูลชั่วคราวและ Mock การเชื่อมต่อ GitHub/Scanner ร่วมกับการทดสอบ Process Timeout และ Restart ด้วยฐานข้อมูลแยก ไม่แทนที่ฐานข้อมูลใช้งานจริง ครอบคลุม Auth, CSRF, Role, Report Validation, History และ ALLOW/BLOCK ทั้งนี้ยังควรตรวจครบวงจรกับ Repository ที่ได้รับอนุญาตและตรวจหน้าจอทั้ง Desktop/Mobile ก่อนส่งงาน
+
+ผลตรวจล่าสุดจากเครื่องพัฒนา: `python -m pytest -q` ผ่าน **270 passed, 3 warnings** และ `node --test tests/dashboard-ui.test.cjs` ผ่าน **48 passed** คำสั่งเหล่านี้เป็นการตรวจในเครื่อง ไม่ใช่หลักฐานแทนการตรวจ GitHub Actions, Required Check หรือการบล็อก Merge ในระบบจริง
 
 ### เมื่อผลไม่ขึ้น
 
