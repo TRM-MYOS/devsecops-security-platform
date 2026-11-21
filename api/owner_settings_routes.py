@@ -14,7 +14,9 @@ class OwnerSettingsRequest(BaseModel):
     owner: str = Field(max_length=100)
     app_id: str = Field(max_length=100)
     installation_id: str = Field(max_length=100)
-    private_key_path: str = Field(max_length=2048)
+    # The browser no longer needs to receive the persisted absolute path.  An
+    # empty value means "keep the currently configured backend key".
+    private_key_path: str = Field(default="", max_length=2048)
     workflow: str = Field(max_length=255)
 
 
@@ -33,7 +35,12 @@ def get_settings(request: Request):
 
 def _verified(payload):
     try:
-        values = owner_settings.validate(payload.model_dump())
+        values = payload.model_dump()
+        if not values["private_key_path"]:
+            values["private_key_path"] = owner_settings.current().get(
+                owner_settings.FIELDS["private_key_path"], ""
+            )
+        values = owner_settings.validate(values)
         result = owner_settings.test_connection(values)
         return values, result
     except owner_settings.SettingsValidationError as error:
@@ -45,6 +52,28 @@ def test_settings(payload: OwnerSettingsRequest, request: Request):
     _administrator(request)
     _, result = _verified(payload)
     return result
+
+
+@router.post("/private-key")
+async def upload_private_key(request: Request):
+    """Accept a raw .pem upload and return only its server-side reference."""
+    _administrator(request)
+    content_length = request.headers.get("content-length")
+    try:
+        if content_length is not None and int(content_length) > owner_settings.MAX_PRIVATE_KEY_BYTES:
+            raise HTTPException(status_code=413, detail="Private key file is too large.")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid upload size.") from None
+    content = await request.body()
+    if len(content) > owner_settings.MAX_PRIVATE_KEY_BYTES:
+        raise HTTPException(status_code=413, detail="Private key file is too large.")
+    try:
+        path, filename = owner_settings.store_private_key(
+            request.headers.get("x-private-key-filename", ""), content
+        )
+    except owner_settings.SettingsValidationError as error:
+        raise HTTPException(status_code=422, detail={"message": str(error), "fields": error.errors}) from error
+    return {"private_key_path": path, "filename": filename, "message": "Private key uploaded to the Backend."}
 
 
 @router.post("")

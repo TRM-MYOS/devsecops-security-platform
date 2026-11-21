@@ -117,7 +117,9 @@ async function fetchJson(url, options = {}) {
   } = options;
   const headers = new Headers(request.headers || {});
   const method = (request.method || "GET").toUpperCase();
-  if (request.body && !headers.has("Content-Type"))
+  const isBinaryBody =
+    typeof Blob !== "undefined" && request.body instanceof Blob;
+  if (request.body && !isBinaryBody && !headers.has("Content-Type"))
     headers.set("Content-Type", "application/json");
   headers.set("Accept", "application/json");
   if (!["GET", "HEAD", "OPTIONS"].includes(method) && state.csrf)
@@ -1167,6 +1169,11 @@ async function dispatchAction(button) {
       return loadUsers();
     case "reload-audit":
       return loadAudit();
+    case "audit-page":
+      auditPage = Number(button.dataset.page);
+      renderAudit();
+      el("audit-container")?.scrollIntoView({ block: "start" });
+      return;
     case "save-user-role":
       return updateUser(id, false, button);
     case "toggle-user":

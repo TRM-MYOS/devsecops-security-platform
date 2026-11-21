@@ -27,6 +27,10 @@ function ownerSettingsErrors(errors = {}) {
 function showOwnerSettings(data) {
   for (const field of OWNER_FIELDS)
     el(`setting-${field}`).value = data.settings[field] || "";
+  const filename = data.private_key_filename || "";
+  el("private-key-filename").textContent = filename
+    ? `Uploaded to Backend: ${filename}`
+    : "No private key uploaded";
   el("settings-source").textContent =
     data.source === "database"
       ? `Saved in database · Updated ${formatDate(data.updated_at)}`
@@ -42,6 +46,13 @@ async function initializeOwnerSettings() {
     "click",
     () => void submitOwnerSettings(false),
   );
+  el("private-key-select").addEventListener("click", () => {
+    if (!ownerSettingsBusy) el("setting-private_key_file").click();
+  });
+  el("setting-private_key_file").addEventListener(
+    "change",
+    (event) => void uploadPrivateKey(event),
+  );
   el("owner-settings-form").addEventListener("input", () => {
     ownerSettingsErrors();
     setMessage(
@@ -54,6 +65,35 @@ async function initializeOwnerSettings() {
     el("owner-settings-fields").disabled = false;
   } catch (error) {
     setMessage("settings-message", error.message, "error");
+  }
+}
+
+async function uploadPrivateKey(event) {
+  if (ownerSettingsBusy || !isSuperUser()) return;
+  const input = event.target;
+  const file = input.files?.[0];
+  if (!file) return;
+  input.disabled = true;
+  el("private-key-select").disabled = true;
+  setMessage("settings-message", "Uploading and validating the private key...");
+  try {
+    const result = await fetchJson("/api/owner-settings/private-key", {
+      method: "POST",
+      headers: { "X-Private-Key-Filename": file.name },
+      body: file,
+    });
+    el("setting-private_key_path").value = result.private_key_path;
+    el("private-key-filename").textContent = `Uploaded to Backend: ${result.filename}`;
+    el("error-private_key_path").textContent = "";
+    el("setting-private_key_path").setAttribute("aria-invalid", "false");
+    setMessage("settings-message", "Private key uploaded. Test or save settings to apply it.", "success");
+  } catch (error) {
+    ownerSettingsErrors(error.fields);
+    setMessage("settings-message", error.fields?.private_key_path || error.message, "error");
+  } finally {
+    input.disabled = false;
+    el("private-key-select").disabled = false;
+    input.value = "";
   }
 }
 

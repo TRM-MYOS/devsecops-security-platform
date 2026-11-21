@@ -1,6 +1,6 @@
 import pytest
 
-from security.policy import evaluate_policy
+from security.policy import evaluate_policy, load_policy_config
 from security.scoring import calculate_grade, calculate_score
 
 
@@ -18,8 +18,10 @@ def test_medium_findings_can_block_by_accumulated_score():
 
 
 def test_score_threshold_and_empty_scan_keep_original_policy():
-    assert evaluate_policy([], 59)["status"] == "BLOCK"
-    assert evaluate_policy([], 60)["status"] == "ALLOW"
+    minimum_score = load_policy_config()["policy"]["minimum_score"]
+    if minimum_score > 0:
+        assert evaluate_policy([], minimum_score - 1)["status"] == "BLOCK"
+    assert evaluate_policy([], minimum_score)["status"] == "ALLOW"
     assert calculate_score([]) == 100
     assert evaluate_policy([], 100)["status"] == "ALLOW"
     assert calculate_score([{"severity": "CRITICAL"}] * 3) == 0

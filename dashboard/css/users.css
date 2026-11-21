@@ -40,6 +40,31 @@
   min-width: 700px;
 }
 
+.audit-table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.audit-table-footer .pagination {
+  margin: 0 0 0 16px;
+}
+
+@media (max-width: 700px) {
+  .audit-table-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .audit-table-footer .pagination {
+    margin-left: 0;
+  }
+}
+
 .create-user-grid {
   display: grid;
   grid-template-columns: 1fr 1.4fr 0.8fr auto;

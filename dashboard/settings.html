@@ -161,22 +161,44 @@
                     ></span>
                   </div>
                   <div class="form-field owner-settings-wide">
-                    <label for="setting-private_key_path"
-                      >Private Key Path</label
-                    >
+                    <label for="setting-private_key_file">Private Key file</label>
+                    <div class="private-key-picker">
+                      <input
+                        id="setting-private_key_file"
+                        class="private-key-input"
+                        type="file"
+                        accept=".pem,application/x-pem-file"
+                        tabindex="-1"
+                        aria-hidden="true"
+                      />
+                      <button
+                        id="private-key-select"
+                        class="private-key-select"
+                        type="button"
+                        aria-describedby="hint-private_key_path error-private_key_path"
+                      >
+                        <span class="private-key-select-icon" aria-hidden="true">↥</span>
+                        <span>Choose .pem file</span>
+                      </button>
+                      <span
+                        id="private-key-filename"
+                        class="private-key-filename"
+                        role="status"
+                        aria-live="polite"
+                        >No private key uploaded</span
+                      >
+                    </div>
                     <input
                       id="setting-private_key_path"
                       name="private_key_path"
+                      type="hidden"
                       required
-                      maxlength="2048"
-                      autocomplete="off"
-                      spellcheck="false"
                       aria-describedby="hint-private_key_path error-private_key_path"
                     />
                     <span id="hint-private_key_path" class="field-hint"
-                      >Absolute .pem path on the Backend server, not the
-                      browser's computer. Keep the key outside the project; its
-                      contents are never displayed.</span
+                      >Choose the `.pem` file from this computer. The Backend stores
+                      a protected copy outside the project and only the filename is
+                      shown here; the key contents are never displayed.</span
                     >
                     <span
                       id="error-private_key_path"

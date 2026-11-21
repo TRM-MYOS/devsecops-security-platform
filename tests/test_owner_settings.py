@@ -2,6 +2,7 @@
 
 import json
 import os
+from pathlib import Path
 import subprocess
 import sys
 import threading
@@ -105,7 +106,9 @@ def test_test_does_not_save_then_save_persists_and_preserves_history(auth_enviro
         saved = client.post("/api/owner-settings", json=candidate, headers=headers)
         assert saved.status_code == 200, saved.text
         assert len(github_http["calls"]) == 8  # Save verifies again; a previous Test is insufficient.
-        assert saved.json()["source"] == "database" and saved.json()["settings"] == candidate
+        assert saved.json()["source"] == "database"
+        assert saved.json()["settings"]["private_key_path"] == ""
+        assert saved.json()["private_key_filename"] == Path(candidate["private_key_path"]).name
         monkeypatch.setenv("DEVSECOPS_GITHUB_OWNER", "ignored-env-owner")
         database.initialize_database()
         database.initialize_database()
@@ -114,10 +117,12 @@ def test_test_does_not_save_then_save_persists_and_preserves_history(auth_enviro
         assert len(auth_environment["service"].list_users()) == 3
         audit = client.get("/api/users/audit").json()["events"][0]
         assert audit["action"] == "owner_settings.updated"
-        assert audit["actor_username"] == "admin" and audit["after"] == candidate
+        assert audit["actor_username"] == "admin"
+        assert audit["after"] == {**candidate, "private_key_path": Path(candidate["private_key_path"]).name}
         assert audit["target_username"] == "Owner Settings"
         output = json.dumps([saved.json(), tested.json(), audit])
         assert "PRIVATE KEY" not in output and "test-installation-token-secret" not in output
+        assert candidate["private_key_path"] not in output
         # An entirely fresh Python process reads the same saved values over Environment.
         process = subprocess.run(
             [sys.executable, "-c", "import json; from repository.owner_settings import current; print(json.dumps(current()))"],
@@ -126,6 +131,25 @@ def test_test_does_not_save_then_save_persists_and_preserves_history(auth_enviro
         )
         assert process.returncode == 0, process.stderr
         assert json.loads(process.stdout)["DEVSECOPS_GITHUB_OWNER"] == "new-owner"
+
+
+def test_private_key_upload_validates_and_stores_outside_project(auth_environment, candidate, monkeypatch, tmp_path):
+    upload_dir = tmp_path / "private-key-store"
+    monkeypatch.setenv("DEVSECOPS_PRIVATE_KEY_UPLOAD_DIR", str(upload_dir))
+    content = Path(candidate["private_key_path"]).read_bytes()
+    with TestClient(auth_environment["api"].app) as client:
+        _, headers = login(client)
+        response = client.post(
+            "/api/owner-settings/private-key",
+            content=content,
+            headers={**headers, "Content-Type": "application/octet-stream", "X-Private-Key-Filename": "dashboard-app.pem"},
+        )
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["filename"] == "dashboard-app.pem"
+    stored = Path(result["private_key_path"])
+    assert stored.parent == upload_dir and stored.name == "dashboard-app.pem" and stored.read_bytes() == content
+    assert "PRIVATE KEY" not in response.text
 
 
 @pytest.mark.parametrize("field,value", [
@@ -222,7 +246,8 @@ def test_save_waits_for_active_sync_and_next_client_uses_new_snapshot(auth_envir
         finally:
             release.set()
         assert sync.result(timeout=10)["branches"][0]["policy_status"] == "ALLOW"
-        assert write.result(timeout=10)["settings"] == candidate
+        saved_settings = write.result(timeout=10)["settings"]
+        assert {**candidate, "private_key_path": ""} == saved_settings
     assert github_monitor.tracking(rid)["policy_status"] is None
     new_client = github_client.GitHubClient()
     try:

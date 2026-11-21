@@ -6,6 +6,9 @@
 let passwordResetUser = null;
 let passwordResetTrigger = null;
 let passwordResetBusy = false;
+const AUDIT_PAGE_SIZE = 10;
+let auditEvents = [];
+let auditPage = 1;
 
 async function loadUsers() {
   if (!isSuperUser()) return;
@@ -201,73 +204,95 @@ function auditChanges(event) {
   );
 }
 
-async function loadAudit() {
+function renderAudit() {
   const container = el("audit-container");
-  container.innerHTML = '<div class="loading">Loading activity...</div>';
-  try {
-    const events = requireArray(
-      await fetchJson(`${API.users}/audit`),
-      "events",
-    );
-    container.innerHTML = events.length
-      ? [
-          '<div class="table-wrapper">',
-          '<table class="audit-table">',
-          "<thead>",
-          "<tr>",
-          '<th scope="col">Time',
-          "</th>",
-          '<th scope="col">Performed by',
-          "</th>",
-          '<th scope="col">Account',
-          "</th>",
-          '<th scope="col">Action',
-          "</th>",
-          '<th scope="col">Change',
-          "</th>",
-          "</tr>",
-          "</thead>",
-          "<tbody>",
-          templateText(
-            events
-              .map((event) =>
-                [
-                  "<tr>",
-                  "<td>",
-                  templateText(escapeHtml(formatDate(event.created_at))),
-                  "</td>",
-                  "<td>",
-                  templateText(
-                    escapeHtml(event.actor_username || "Bootstrap CLI"),
+  const pages = Math.max(1, Math.ceil(auditEvents.length / AUDIT_PAGE_SIZE));
+  auditPage = Math.max(1, Math.min(auditPage, pages));
+  const start = (auditPage - 1) * AUDIT_PAGE_SIZE;
+  const displayed = auditEvents.slice(start, start + AUDIT_PAGE_SIZE);
+  container.innerHTML = auditEvents.length
+    ? [
+        '<div class="table-wrapper">',
+        '<table class="audit-table">',
+        "<thead>",
+        "<tr>",
+        '<th scope="col">Time',
+        "</th>",
+        '<th scope="col">Performed by',
+        "</th>",
+        '<th scope="col">Account',
+        "</th>",
+        '<th scope="col">Action',
+        "</th>",
+        '<th scope="col">Change',
+        "</th>",
+        "</tr>",
+        "</thead>",
+        "<tbody>",
+        templateText(
+          displayed
+            .map((event) =>
+              [
+                "<tr>",
+                "<td>",
+                templateText(escapeHtml(formatDate(event.created_at))),
+                "</td>",
+                "<td>",
+                templateText(
+                  escapeHtml(event.actor_username || "Bootstrap CLI"),
+                ),
+                "</td>",
+                "<td>",
+                templateText(
+                  escapeHtml(
+                    event.target_username || event.after?.username || "-",
                   ),
-                  "</td>",
-                  "<td>",
-                  templateText(
-                    escapeHtml(
-                      event.target_username || event.after?.username || "-",
-                    ),
-                  ),
-                  "</td>",
-                  "<td>",
-                  templateText(escapeHtml(event.action || "-")),
-                  "</td>",
-                  "<td>",
-                  templateText(escapeHtml(auditChanges(event))),
-                  "</td>",
-                  "</tr>",
-                ].join(""),
-              )
-              .join(""),
-          ),
-          "</tbody>",
-          "</table>",
-          "</div>",
-        ].join("")
+                ),
+                "</td>",
+                "<td>",
+                templateText(escapeHtml(event.action || "-")),
+                "</td>",
+                "<td>",
+                templateText(escapeHtml(auditChanges(event))),
+                "</td>",
+                "</tr>",
+              ].join(""),
+            )
+            .join(""),
+        ),
+        "</tbody>",
+        "</table>",
+        "</div>",
+        '<div class="audit-table-footer">',
+        "<div>",
+        "Showing ",
+        templateText(start + 1),
+        "-",
+        templateText(Math.min(start + AUDIT_PAGE_SIZE, auditEvents.length)),
+        " of ",
+        templateText(auditEvents.length),
+        " activities",
+        "</div>",
+        paginationControls(auditPage, pages, "audit-page"),
+        "</div>",
+      ].join("")
       : emptyState(
           "No administrative activity",
           "Account and permission changes will appear here.",
         );
+}
+
+async function loadAudit() {
+  const container = el("audit-container");
+  container.innerHTML = '<div class="loading">Loading activity...</div>';
+  try {
+    auditEvents = requireArray(
+      await fetchJson(`${API.users}/audit`),
+      "events",
+    );
+    renderAudit();
   } catch (error) {
+    auditEvents = [];
     container.innerHTML = errorBox(error, "reload-audit");
   }
 }

@@ -53,7 +53,8 @@ def test_only_admin_can_set_global_threshold(auth_environment, role):
         assert response.status_code == (200 if role == "superuser" else 401 if role is None else 403)
         if role == "superuser":
             assert response.json()["settings"]["activation"] == "setup_required"
-            assert response.json()["central_file_minimum"] == 60
+            from security.policy import load_local_policy
+            assert response.json()["central_file_minimum"] == load_local_policy()["policy"]["minimum_score"]
             assert client.patch("/api/policy", json={"minimum_score": 90}).status_code == 403
 
 

@@ -2,7 +2,9 @@
 
 import json
 import hashlib
+import os
 import re
+import secrets
 import threading
 from contextlib import closing
 from contextvars import ContextVar
@@ -22,6 +24,7 @@ FIELDS = {
 }
 DEFAULT_OWNER = "TRM-MYOS"
 DEFAULT_WORKFLOW = "security-gate-test.yml"
+MAX_PRIVATE_KEY_BYTES = 64 * 1024
 # Save and sync share this lock: an active round finishes before a new configuration
 # is published. Nested branch/history calls reuse the same immutable-by-convention snapshot.
 SETTINGS_LOCK = threading.RLock()
@@ -32,6 +35,58 @@ class SettingsValidationError(ValueError):
     def __init__(self, errors):
         self.errors = errors
         super().__init__("Check the highlighted settings.")
+
+
+def private_key_upload_directory():
+    """Return the protected key directory used by the Owner Settings uploader."""
+    configured = os.environ.get("DEVSECOPS_PRIVATE_KEY_UPLOAD_DIR", "").strip()
+    return Path(configured).expanduser() if configured else Path.home() / ".devsecops-security-platform" / "private-keys"
+
+
+def _validate_private_key_content(content):
+    if not isinstance(content, bytes) or not content or len(content) > MAX_PRIVATE_KEY_BYTES:
+        raise ValueError("Key exceeds size limit")
+    from cryptography.hazmat.primitives.serialization import load_pem_private_key
+    from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+    from cryptography.exceptions import UnsupportedAlgorithm
+
+    try:
+        key = load_pem_private_key(content, password=None)
+        if not isinstance(key, RSAPrivateKey) or key.key_size < 2048:
+            raise ValueError("Unsupported signing key")
+    except (ValueError, TypeError, UnsupportedAlgorithm) as error:
+        raise ValueError("Cannot read a supported, unencrypted RSA private key (at least 2048 bits).") from error
+
+
+def store_private_key(filename, content):
+    """Validate and store an uploaded key outside the project directory."""
+    original = re.split(r"[\\/]", str(filename or ""))[-1].strip()
+    if not original or original.lower() in {".", ".."} or not original.lower().endswith(".pem"):
+        raise SettingsValidationError({"private_key_path": "Choose an unencrypted .pem RSA private key file."})
+    if any(ord(char) < 32 for char in original):
+        raise SettingsValidationError({"private_key_path": "The selected filename is invalid."})
+    try:
+        _validate_private_key_content(content)
+        directory = private_key_upload_directory()
+        directory.mkdir(parents=True, exist_ok=True)
+        try:
+            directory.chmod(0o700)
+        except OSError:
+            pass
+        path = directory / original
+        if path.exists():
+            path = directory / f"{path.stem}-{secrets.token_hex(8)}{path.suffix}"
+        with path.open("xb") as target:
+            target.write(content)
+            target.flush()
+            os.fsync(target.fileno())
+        try:
+            path.chmod(0o600)
+        except OSError:
+            pass
+    except (OSError, ValueError) as error:
+        raise SettingsValidationError({"private_key_path": str(error)}) from error
+    return str(path), original
 
 
 def current():
@@ -60,7 +115,14 @@ def read():
     with SETTINGS_LOCK, closing(database.get_connection()) as connection:
         values = current()
         row = connection.execute("SELECT updated_at FROM owner_settings WHERE id=1").fetchone()
-    return {"settings": {field: values.get(key, "") for field, key in FIELDS.items()},
+    settings = {field: values.get(key, "") for field, key in FIELDS.items()}
+    private_key_path = settings["private_key_path"]
+    # The absolute backend path is an implementation detail.  Return only the
+    # filename for the authenticated UI; save/test can retain the current path
+    # when the submitted field is empty.
+    settings["private_key_path"] = ""
+    return {"settings": settings,
+            "private_key_filename": Path(private_key_path).name if private_key_path else "",
             "source": "database" if row else "environment", "updated_at": row["updated_at"] if row else None}
 
 
@@ -68,6 +130,15 @@ def fingerprint():
     values = current()
     payload = {field: values.get(key, "") for field, key in FIELDS.items()}
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+
+
+def _audit_values(values):
+    """Keep backend filesystem paths out of the administrative audit feed."""
+    safe = dict(values)
+    path = safe.get("private_key_path")
+    if path:
+        safe["private_key_path"] = Path(path).name
+    return safe
 
 
 def settings_scope(function):
@@ -97,18 +168,10 @@ def validate(values):
         errors["private_key_path"] = "Enter an absolute .pem path on the Backend server."
     else:
         try:
-            from cryptography.hazmat.primitives.serialization import load_pem_private_key
-            from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
-            from cryptography.exceptions import UnsupportedAlgorithm
-
             with path.open("rb") as source:
-                content = source.read(65537)
-            if len(content) > 65536:
-                raise ValueError("Key exceeds size limit")
-            key = load_pem_private_key(content, password=None)
-            if not isinstance(key, RSAPrivateKey) or key.key_size < 2048:
-                raise ValueError("Unsupported signing key")
-        except (OSError, ValueError, TypeError, UnsupportedAlgorithm):
+                content = source.read(MAX_PRIVATE_KEY_BYTES + 1)
+            _validate_private_key_content(content)
+        except (OSError, ValueError):
             errors["private_key_path"] = "Cannot read a supported, unencrypted RSA private key (at least 2048 bits)."
     if errors:
         raise SettingsValidationError(errors)
@@ -150,5 +213,5 @@ def save(values, actor_id):
             "message": "Connection settings changed. Waiting for synchronization.",
         }),))
         _audit(connection, actor_id, {"id": None, "username": "Owner Settings"},
-               "owner_settings.updated", before, values)
+               "owner_settings.updated", _audit_values(before), _audit_values(values))
     return read()

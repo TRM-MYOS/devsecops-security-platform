@@ -99,6 +99,11 @@ async def conflicting_resource(request, error):
     return JSONResponse(status_code=409, content={"detail": str(error)})
 
 
+@app.exception_handler(membership.MembershipRequired)
+async def membership_required(request, error):
+    return JSONResponse(status_code=403, content={"detail": str(error)})
+
+
 @app.exception_handler(PermissionError)
 async def denied_resource(request, error):
     return JSONResponse(status_code=403, content={"detail": "Insufficient permissions"})
@@ -132,7 +137,7 @@ app.add_middleware(
     allow_origins=list(app.state.auth_settings.allowed_origins),
     allow_credentials=True,
     allow_methods=["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-CSRF-Token"],
+    allow_headers=["Content-Type", "X-CSRF-Token", "X-Private-Key-Filename"],
 )
 
 
@@ -712,6 +717,10 @@ def scan_repository(
     request: Request,
 ):
 
+    # Authorize the mutating operation before starting work.  The middleware
+    # performs the initial visibility check, while this check closes the gap
+    # for a membership that was revoked between middleware and handler.
+    membership.check(request.state.user["id"], repository_id, manage=True)
     result = execute_repository_scan(
         repository_id
     )
@@ -996,6 +1005,8 @@ def github_status():
 def sync_github_repository(repository_id: int, http_request: Request, request: GitHubSyncRequest | None = None):
     if repository_manager.get_repository(repository_id) is None:
         raise HTTPException(status_code=404, detail="Repository not found")
+    # Do not contact GitHub until the caller is still an authorized member.
+    membership.check(http_request.state.user["id"], repository_id, manage=True)
     try:
         if request and request.branch:
             result = github_monitor.sync_repository(repository_manager, repository_id, request.branch)

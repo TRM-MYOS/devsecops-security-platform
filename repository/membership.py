@@ -17,6 +17,10 @@ class Conflict(RuntimeError):
     pass
 
 
+class MembershipRequired(PermissionError):
+    """The repository exists, but the current account is not a member."""
+
+
 def parse_id(value):
     text = str(value)
     if not re.fullmatch(r"[0-9]{1,19}", text) or not 0 < int(text) <= 9223372036854775807:
@@ -93,10 +97,17 @@ def enroll(url, user_id):
             except ValueError:
                 continue
         if matches:
-            for row in matches:
-                require(connection, user_id, row["id"])
             if len(matches) > 1:
                 raise Conflict("Duplicate repository identities require Super User review; no data has been merged")
+            row = matches[0]
+            if user["role"] != "superuser" and not connection.execute(
+                "SELECT 1 FROM repository_members WHERE repository_id=? AND user_id=?",
+                (row["id"], user_id),
+            ).fetchone():
+                raise MembershipRequired(
+                    "Repository already exists, but you do not have access. "
+                    "Ask a Super User or a repository member to add you."
+                )
             return dict(matches[0])
         now = datetime.now(timezone.utc).isoformat()
         cursor = connection.execute("INSERT INTO repositories (name,url,created_at) VALUES (?,?,?)",

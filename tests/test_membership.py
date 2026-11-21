@@ -41,7 +41,7 @@ def test_nonmembers_cannot_enumerate_or_guess_repository_and_scan_ids(workspace,
             assert response.status_code == (404 if role == "operator" else 403)
         for endpoint in ("/scan", "/api/repositories"):
             response = client.post(endpoint, json={"repo_url": hidden["url"]}, headers=csrf)
-            assert response.status_code == (404 if role == "operator" else 403)
+            assert response.status_code == 403
         assert client.get("/api/repositories").json()["count"] == 1
     scanner.assert_not_called()
 
@@ -51,7 +51,9 @@ def test_url_aliases_never_grant_existing_membership(workspace, url):
     env, hidden, _ = workspace
     with TestClient(env["api"].app) as client:
         _, csrf = login(client, "operator")
-        assert client.post("/api/repositories", json={"repo_url": url}, headers=csrf).status_code == 404
+        response = client.post("/api/repositories", json={"repo_url": url}, headers=csrf)
+        assert response.status_code == 403
+        assert "already exists" in response.json()["detail"]
     with closing(env["database"].get_connection()) as connection:
         assert connection.execute("SELECT COUNT(*) FROM repository_members WHERE repository_id=?", (hidden["id"],)).fetchone()[0] == 0
 
@@ -69,7 +71,9 @@ def test_new_operator_repository_joins_atomically_and_leave_does_not_grant_reent
         assert client.post(f"/api/repositories/{repo['id']}/leave", json={}, headers={"X-CSRF-Token": "wrong"}).status_code == 403
         assert client.post(f"/api/repositories/{repo['id']}/leave", json={}, headers=csrf).status_code == 200
         assert client.get(f"/api/repositories/{repo['id']}").status_code == 404
-        assert client.post("/api/repositories", json=payload, headers=csrf).status_code == 404
+        response = client.post("/api/repositories", json=payload, headers=csrf)
+        assert response.status_code == 403
+        assert "already exists" in response.json()["detail"]
     assert env["api"].repository_manager.get_repository(repo["id"])
 
 
@@ -220,7 +224,7 @@ def test_concurrent_repository_enrollment_has_only_one_creator_membership(worksp
     def enroll(user):
         try:
             return membership.enroll("https://github.com/TRM-MYOS/concurrent.git", user)["id"]
-        except membership.NotFound:
+        except (membership.NotFound, membership.MembershipRequired):
             return None
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(enroll,[peer["id"],env["users"]["operator"]["id"]]))
